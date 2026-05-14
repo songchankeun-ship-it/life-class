@@ -1,0 +1,17 @@
+{
+  "name": "오늘의 교시",
+  "short_name": "교시",
+  "description": "오늘을 한 번에 다 바꾸지 말고, 한 교시씩 정리하세요.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f1ea",
+  "theme_color": "#3f6390",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

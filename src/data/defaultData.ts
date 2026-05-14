@@ -1,0 +1,219 @@
+import type {
+  AppData,
+  Project,
+  MoveChecklistItem,
+  SubscriptionItem,
+  SpotItem,
+  AppSettings,
+} from '../types';
+
+const now = () => new Date().toISOString();
+
+export const APP_VERSION = '0.2.0';
+export const APP_NAME = '오늘의 교시';
+
+export const defaultSettings: AppSettings = {
+  version: APP_VERSION,
+  appName: APP_NAME,
+};
+
+export const defaultProjects: Project[] = [
+  {
+    id: 'proj-image-ai',
+    name: 'AI 이미지 제작 프로그램',
+    category: 'work',
+    status: 'done',
+    importance: 'mid',
+    urgency: 'low',
+    description: '스마트스토어 이미지 제작 자동화 프로그램. 이제 개발보다는 실제 업무 적용과 개선점 기록 단계.',
+    nextAction: '실제 업무 적용하며 개선점 1줄씩 기록',
+    memo: '완성됨. 메인 교시 후보에서는 제외, 점검 항목으로만 표시.',
+    createdAt: now(),
+    updatedAt: now(),
+    completed: true,
+  },
+  {
+    id: 'proj-trading-bot',
+    name: 'AI 봇 트레이딩 매매프로그램',
+    category: 'trading',
+    status: 'active',
+    importance: 'critical',
+    urgency: 'high',
+    description: '실제 돈이 들어갈 수 있는 진지한 프로젝트. 실전 투입 전 리스크 관리, 백테스트, 소액 테스트 기준이 필요함.',
+    nextAction: '손실 제한 기준 3가지 문장으로 적기',
+    memo: '실전 투자로 바로 넘어가지 말 것. 리스크 기준 정리가 먼저.',
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'proj-couple-app',
+    name: '커플앱',
+    category: 'couple',
+    status: 'hobby',
+    importance: 'low',
+    urgency: 'low',
+    description: '여자친구와 재미로 만드는 비트윈 느낌의 커플앱.',
+    nextAction: '오늘은 손대지 않기 (선택교시 후보)',
+    memo: '취미 진행. 평일 메인 교시에는 넣지 말기.',
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'proj-smartstore',
+    name: '스마트스토어 운영',
+    category: 'work',
+    status: 'active',
+    importance: 'high',
+    urgency: 'mid',
+    description: '상품등록, 이미지 제작, 상세페이지, 리뷰 답글, CS, 행사 준비 등을 포함하는 상시 업무.',
+    nextAction: 'CS 답글 밀린 것 1건 처리',
+    memo: '상시 진행. 매일 작은 액션 1개씩.',
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'proj-money-subs',
+    name: '돈 / 구독 정리',
+    category: 'money',
+    status: 'active',
+    importance: 'high',
+    urgency: 'high',
+    description: 'OTT, AI툴, 앱 구독, 자동결제 정리. 안 쓰는 구독부터 해지.',
+    nextAction: '안 쓰는 구독 1개만 해지',
+    memo: '고정비 절감 = 미래 수익. 미루지 말 것.',
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'proj-home-clean',
+    name: '집 / 옷 정리',
+    category: 'life',
+    status: 'active',
+    importance: 'mid',
+    urgency: 'high',
+    description: '이사 전 버릴 것, 가져갈 것, 보류할 것 분류. 옷 정리 포함.',
+    nextAction: '쓰레기 1봉투만 만들기',
+    memo: '하루에 1봉투씩이면 이사 전까지 충분.',
+    createdAt: now(),
+    updatedAt: now(),
+  },
+];
+
+const moveItem = (section: MoveChecklistItem['section'], title: string, done = false): MoveChecklistItem => ({
+  id: 'move-' + section + '-' + Math.random().toString(36).slice(2, 9),
+  section,
+  title,
+  done,
+  memo: '',
+});
+
+export const defaultMoveChecklist: MoveChecklistItem[] = [
+  moveItem('contract', '이사업체 최종 선택'),
+  moveItem('contract', '계약금 확인'),
+  moveItem('contract', '총 견적 확인'),
+  moveItem('contract', '보관료 포함 여부 확인'),
+  moveItem('contract', '양쪽 사다리차 비용 포함 여부 확인'),
+  moveItem('contract', '추가비용 발생 가능성 확인'),
+  moveItem('contract', '파손/분실 보상 기준 확인'),
+  moveItem('schedule', '5월 31일 반출 시간 확정'),
+  moveItem('schedule', '6월 10일 재입고 시간 확정'),
+  moveItem('schedule', '짐 보관 장소 확인'),
+  moveItem('schedule', '임시 거주 기간 계획 확인'),
+  moveItem('pack', '버릴 짐 분류'),
+  moveItem('pack', '가져갈 짐 분류'),
+  moveItem('pack', '보류할 짐 분류'),
+  moveItem('pack', '옷 정리'),
+  moveItem('pack', '중요한 서류 따로 챙기기'),
+  moveItem('pack', '귀중품 따로 챙기기'),
+  moveItem('pack', '당장 쓸 생활용품 따로 챙기기'),
+  moveItem('after', '전입신고'),
+  moveItem('after', '확정일자'),
+  moveItem('after', '인터넷 설치/이전'),
+  moveItem('after', '주소 변경'),
+  moveItem('after', '관리비/공과금 확인'),
+];
+
+const sub = (name: string, amount: number, category: SubscriptionItem['category'], payDay = 1): SubscriptionItem => ({
+  id: 'sub-' + name.replace(/\s+/g, '-').toLowerCase() + '-' + Math.random().toString(36).slice(2, 7),
+  name,
+  amount,
+  payDay,
+  usage: 'using',
+  category,
+  memo: '',
+});
+
+export const defaultSubscriptions: SubscriptionItem[] = [
+  sub('넷플릭스', 17000, 'ott', 5),
+  sub('티빙', 13900, 'ott', 10),
+  sub('웨이브', 13900, 'ott', 12),
+  sub('디즈니플러스', 13900, 'ott', 15),
+  sub('쿠팡플레이', 7890, 'ott', 18),
+  sub('유튜브 프리미엄', 14900, 'ott', 20),
+  sub('멜론', 11400, 'music', 22),
+  sub('스포티파이', 13900, 'music', 25),
+  sub('아이클라우드', 3900, 'cloud', 7),
+  sub('구글 드라이브', 2900, 'cloud', 9),
+  sub('어도비', 29000, 'ai', 11),
+  sub('캔바', 14900, 'ai', 13),
+  sub('AI 툴 구독', 25000, 'ai', 17),
+  sub('기타 자동결제', 9900, 'etc', 28),
+];
+
+export const defaultSpots: SpotItem[] = [
+  {
+    id: 'spot-car-key',
+    name: '차키',
+    homeSpot: '현관 트레이',
+    carSpot: '운전석 컵홀더',
+    important: true,
+    memo: '들어오면 무조건 트레이로. 차에서는 컵홀더 1번 자리.',
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'spot-ecig',
+    name: '전자담배',
+    homeSpot: '현관 트레이',
+    carSpot: '운전석 컵홀더',
+    important: true,
+    memo: '충전기도 같은 자리에 두기.',
+    createdAt: now(),
+    updatedAt: now(),
+  },
+  {
+    id: 'spot-wallet',
+    name: '지갑',
+    homeSpot: '현관 트레이',
+    carSpot: '',
+    important: true,
+    memo: '',
+    createdAt: now(),
+    updatedAt: now(),
+  },
+];
+
+export const moveInfo = {
+  oldOutDate: '2026-05-31',
+  newInDate: '2026-06-10',
+  storageDays: 10,
+  oldFloor: '14층',
+  newFloor: '20층대',
+  ladderTruck: '양쪽 필요 가능성',
+  movein: '6월 10일 입주 후 전입신고',
+  registration: '새 집이 임대차 계약이면 확정일자 함께',
+};
+
+export const buildDefaultAppData = (): AppData => ({
+  tasks: [],
+  projects: defaultProjects,
+  dailyPlans: {},
+  checkIns: {},
+  parking: [],
+  moveChecklist: defaultMoveChecklist,
+  subscriptions: defaultSubscriptions,
+  reviews: {},
+  spots: defaultSpots,
+  purchases: [],
+  settings: defaultSettings,
+});

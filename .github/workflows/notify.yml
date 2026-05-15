@@ -1,0 +1,46 @@
+name: Telegram Daily Notifications
+
+on:
+  schedule:
+    # KST = UTC+9
+    - cron: '0 0 * * *'    # KST 09:00 - 아침 체크인
+    - cron: '0 13 * * *'   # KST 22:00 - 밤 정산
+    - cron: '0 10 * * 5'   # KST 금 19:00 - 차 5분 리셋
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine message
+        id: msg
+        env:
+          TZ: Asia/Seoul
+        run: |
+          HOUR=$(TZ=Asia/Seoul date +%H)
+          DOW=$(TZ=Asia/Seoul date +%u)  # 1=Mon ... 7=Sun
+          APP_URL="https://songchankeun-ship-it.github.io/life-class/"
+
+          if [ "$HOUR" = "09" ]; then
+            TEXT="🌅 좋은 아침이에요\n\n아침 체크인 시간입니다. 오늘 떠오르는 할 일들을 적고 시간표를 만들어보세요.\n\n${APP_URL}checkin"
+          elif [ "$HOUR" = "22" ]; then
+            TEXT="🌙 밤 정산 시간\n\n오늘 끝낸 일, 못 한 일, 내일로 넘길 일을 정리해보세요.\n못 한 게 있어도 괜찮습니다.\n\n${APP_URL}night"
+          elif [ "$DOW" = "5" ] && [ "$HOUR" = "19" ]; then
+            TEXT="🚗 금요일 차 5분 리셋\n\n차 안 쓰레기 + 잡동사니 5분만 비우기.\n다음 한 주 가볍게 시작하세요.\n\n${APP_URL}spots"
+          else
+            TEXT="📌 Life Class 알림\n\n${APP_URL}"
+          fi
+          echo "text<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$TEXT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send Telegram message
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TEXT: ${{ steps.msg.outputs.text }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${CHAT}" \
+            --data-urlencode "text=${TEXT}" \
+            --data-urlencode "disable_web_page_preview=true"

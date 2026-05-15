@@ -1,6 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#3f6390"/>
-  <rect x="100" y="140" width="312" height="48" rx="24" fill="white" fill-opacity="0.95"/>
-  <rect x="100" y="232" width="312" height="48" rx="24" fill="white" fill-opacity="0.70"/>
-  <rect x="100" y="324" width="312" height="48" rx="24" fill="white" fill-opacity="0.45"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5a7eaa"/>
+      <stop offset="50%" stop-color="#3f6390"/>
+      <stop offset="100%" stop-color="#2b486e"/>
+    </linearGradient>
+    <linearGradient id="barLight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#f0ebde" stop-opacity="0.92"/>
+    </linearGradient>
+    <linearGradient id="barMid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#e8e2d1" stop-opacity="0.65"/>
+    </linearGradient>
+    <linearGradient id="barDim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#e8e2d1" stop-opacity="0.32"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+
+  <rect x="96" y="128" width="320" height="56" rx="28" fill="url(#barLight)"/>
+  <circle cx="132" cy="156" r="9" fill="#c47a5b"/>
+
+  <rect x="96" y="228" width="284" height="56" rx="28" fill="url(#barMid)"/>
+
+  <rect x="96" y="328" width="240" height="56" rx="28" fill="url(#barDim)"/>
 </svg>

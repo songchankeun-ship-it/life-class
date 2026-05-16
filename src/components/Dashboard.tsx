@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import type { AppData, DailyCheckIn, DailyPlan, ParkingItem, Project, SubscriptionItem } from '../types';
-import { CONDITION_LABEL } from '../types';
+import type { AppData, DailyCheckIn, DailyPlan, Entry, ParkingItem, Project, SubscriptionItem } from '../types';
+import { CONDITION_LABEL, ENTRY_CATEGORY_LABEL } from '../types';
 import { StatCard } from './StatCard';
 import { SectionCard } from './SectionCard';
 import { EmptyState } from './EmptyState';
@@ -80,8 +80,55 @@ export function Dashboard({
     ? Math.round((moveDoneCount / data.moveChecklist.length) * 100)
     : 0;
 
+  // 오늘 / 내일 / 미완료 알림 Entry
+  const todayEntries = useMemo(() => {
+    return data.entries
+      .filter((e) => !e.done && !e.archived && e.date === today)
+      .sort((a, b) => (a.time ?? '99:99').localeCompare(b.time ?? '99:99'));
+  }, [data.entries, today]);
+
+  const upcomingEntries = useMemo(() => {
+    return data.entries
+      .filter((e) => !e.done && !e.archived && e.date && e.date > today && e.needsReminder)
+      .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
+      .slice(0, 3);
+  }, [data.entries, today]);
+
   return (
     <div className="space-y-5">
+      {(todayEntries.length > 0 || upcomingEntries.length > 0) && (
+        <SectionCard title="오늘의 알림" subtitle="채팅에서 던진 항목 중 오늘 처리할 것">
+          {todayEntries.length > 0 && (
+            <div className="space-y-2 mb-3">
+              {todayEntries.map((e: Entry) => (
+                <div key={e.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-[var(--color-accent-soft)]">
+                  <span className="text-[11px] lc-text-blue font-semibold flex-shrink-0">
+                    {e.time ?? '오늘'}
+                  </span>
+                  <span className="text-sm lc-text-deep flex-1 min-w-0 truncate">{e.title}</span>
+                  <span className="text-[10px] lc-text-mute flex-shrink-0">
+                    {ENTRY_CATEGORY_LABEL[e.category]}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {upcomingEntries.length > 0 && (
+            <div>
+              <div className="text-[11px] lc-text-mute mb-1.5">곧 다가오는 알림</div>
+              <div className="space-y-1.5">
+                {upcomingEntries.map((e: Entry) => (
+                  <div key={e.id} className="flex items-center gap-2 text-[12px] lc-text-soft">
+                    <span className="font-medium">{e.date}{e.time ? ' ' + e.time : ''}</span>
+                    <span className="truncate">{e.title}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </SectionCard>
+      )}
+
       <SectionCard
         title={formatKoreanDate(today)}
         subtitle={plan?.headline ?? defaultHeadline(checkIn)}

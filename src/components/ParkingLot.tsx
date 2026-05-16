@@ -224,6 +224,37 @@ export function ParkingLot({
           </ul>
         )}
       </SectionCard>
+
+      {(() => {
+        const aiParkings = data.entries.filter(
+          (e) => e.category === 'parking' && !e.done && !e.archived,
+        );
+        if (aiParkings.length === 0) return null;
+        return (
+          <SectionCard
+            title="AI 비서가 분류한 보류 항목"
+            subtitle="채팅에서 던진 항목 중 '보류'로 분류된 것들 (편집/완료는 채팅 탭의 '보류' 카테고리에서)"
+          >
+            <ul className="space-y-2">
+              {aiParkings.map((e) => (
+                <li key={e.id} className="lc-card p-3 flex items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium lc-text-deep">{e.title}</div>
+                    {e.date && (
+                      <div className="text-[11px] lc-text-soft mt-0.5">
+                        {e.date}{e.time ? ' ' + e.time : ''}
+                      </div>
+                    )}
+                    {e.summary && (
+                      <div className="text-[12px] lc-text-soft mt-1">{e.summary}</div>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </SectionCard>
+        );
+      })()}
     </div>
   );
 }

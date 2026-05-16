@@ -29,6 +29,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'idea', label: '아이디어' },
   { key: 'memo', label: '메모' },
   { key: 'parking', label: '보류' },
+  { key: 'review', label: '회고' },
 ];
 
 const CATEGORY_STYLE: Record<EntryCategory, { bg: string; fg: string }> = {
@@ -63,16 +64,18 @@ export function Chat({
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [editing, setEditing] = useState<Entry | null>(null);
   const [expandedOriginalId, setExpandedOriginalId] = useState<string | null>(null);
+  const [categoryMenuId, setCategoryMenuId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const messages = data.chatMessages;
   const entries = data.entries;
 
   useEffect(() => {
-    if (activeTab === 'all' && scrollRef.current) {
+    if (activeTab === 'all' && scrollRef.current && !searchQuery) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages.length, loading, activeTab]);
+  }, [messages.length, loading, activeTab, searchQuery]);
 
   const saveKey = () => {
     setApiKey(apiKey.trim());
@@ -127,10 +130,26 @@ export function Chat({
     }
   };
 
+  // 검색
+  const q = searchQuery.trim().toLowerCase();
+  const matchesQuery = (e: Entry) => {
+    if (!q) return true;
+    return (
+      e.title.toLowerCase().includes(q) ||
+      (e.summary?.toLowerCase().includes(q) ?? false) ||
+      (e.originalText?.toLowerCase().includes(q) ?? false) ||
+      (e.tags?.some((t) => t.toLowerCase().includes(q)) ?? false)
+    );
+  };
+
   const filteredEntries = useMemo(() => {
-    if (activeTab === 'all') return entries;
+    if (activeTab === 'all') {
+      // 전체 탭 + 검색일 때만 cards 만 보여줌
+      if (q) return entries.filter(matchesQuery);
+      return entries;
+    }
     return entries
-      .filter((e) => e.category === activeTab && !e.archived)
+      .filter((e) => e.category === activeTab && !e.archived && matchesQuery(e))
       .sort((a, b) => {
         if ((a.done ?? false) !== (b.done ?? false)) return a.done ? 1 : -1;
         if (a.date && b.date) return a.date.localeCompare(b.date);
@@ -138,10 +157,12 @@ export function Chat({
         if (b.date) return 1;
         return b.createdAt.localeCompare(a.createdAt);
       });
-  }, [entries, activeTab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, activeTab, q]);
 
   const timelineItems = useMemo(() => {
     if (activeTab !== 'all') return [];
+    if (q) return []; // 검색 중에는 타임라인 대신 검색 결과
     type Item =
       | { kind: 'msg'; msg: ChatMessage }
       | { kind: 'entry'; entry: Entry };
@@ -156,7 +177,12 @@ export function Chat({
       }
     });
     return items;
-  }, [activeTab, messages, entries]);
+  }, [activeTab, messages, entries, q]);
+
+  const handleCategoryChange = (entry: Entry, newCat: EntryCategory) => {
+    onUpdateEntry({ ...entry, category: newCat, updatedAt: new Date().toISOString() });
+    setCategoryMenuId(null);
+  };
 
   if (showKeyInput) {
     return (
@@ -189,6 +215,7 @@ export function Chat({
 
   return (
     <div className="flex flex-col gap-3" style={{ height: 'calc(100vh - 180px)' }}>
+      {/* 카테고리 탭바 */}
       <div className="lc-card p-1.5 flex items-center gap-1 overflow-x-auto whitespace-nowrap">
         {TABS.map((t) => {
           const isActive = t.key === activeTab;
@@ -223,8 +250,31 @@ export function Chat({
         })}
       </div>
 
+      {/* 검색창 */}
+      <div className="relative">
+        <input
+          type="text"
+          className="lc-input"
+          placeholder="제목·내용·태그로 검색"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{ paddingRight: searchQuery ? 40 : 12 }}
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={() => setSearchQuery('')}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md flex items-center justify-center lc-text-mute hover:bg-[var(--color-bg-soft)]"
+            aria-label="검색어 지우기"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 pb-2">
-        {activeTab === 'all' && timelineItems.length === 0 && (
+        {/* 전체 탭, 검색 없음 → 타임라인 */}
+        {activeTab === 'all' && !q && timelineItems.length === 0 && (
           <div className="lc-card p-6 text-center">
             <div className="text-lg font-semibold lc-text-deep mb-2">안녕하세요</div>
             <div className="text-[15px] lc-text-soft leading-[1.75]">
@@ -235,7 +285,7 @@ export function Chat({
           </div>
         )}
 
-        {activeTab === 'all' && timelineItems.map((item, idx) => {
+        {activeTab === 'all' && !q && timelineItems.map((item, idx) => {
           if (item.kind === 'msg') {
             const m = item.msg;
             return (
@@ -255,17 +305,23 @@ export function Chat({
                 onDelete={() => { if (confirm('이 항목을 삭제할까요?')) onDeleteEntry(item.entry.id); }}
                 expanded={expandedOriginalId === item.entry.id}
                 onToggleOriginal={() => setExpandedOriginalId(expandedOriginalId === item.entry.id ? null : item.entry.id)}
+                categoryMenuOpen={categoryMenuId === item.entry.id}
+                onToggleCategoryMenu={() => setCategoryMenuId(categoryMenuId === item.entry.id ? null : item.entry.id)}
+                onChangeCategory={(c) => handleCategoryChange(item.entry, c)}
               />
             );
           }
         })}
 
-        {activeTab !== 'all' && filteredEntries.length === 0 && (
+        {/* 카테고리 탭 or 검색 → 카드 리스트 */}
+        {(activeTab !== 'all' || q) && filteredEntries.length === 0 && (
           <div className="lc-card p-6 text-center">
-            <div className="text-sm lc-text-soft">아직 이 카테고리에 정리된 게 없어요.</div>
+            <div className="text-sm lc-text-soft">
+              {q ? '검색 결과가 없어요.' : '아직 이 카테고리에 정리된 게 없어요.'}
+            </div>
           </div>
         )}
-        {activeTab !== 'all' && filteredEntries.map((e) => (
+        {(activeTab !== 'all' || q) && filteredEntries.map((e) => (
           <EntryCard
             key={e.id}
             entry={e}
@@ -274,6 +330,9 @@ export function Chat({
             onDelete={() => { if (confirm('이 항목을 삭제할까요?')) onDeleteEntry(e.id); }}
             expanded={expandedOriginalId === e.id}
             onToggleOriginal={() => setExpandedOriginalId(expandedOriginalId === e.id ? null : e.id)}
+            categoryMenuOpen={categoryMenuId === e.id}
+            onToggleCategoryMenu={() => setCategoryMenuId(categoryMenuId === e.id ? null : e.id)}
+            onChangeCategory={(c) => handleCategoryChange(e, c)}
           />
         ))}
 
@@ -331,9 +390,22 @@ interface EntryCardProps {
   onDelete: () => void;
   expanded: boolean;
   onToggleOriginal: () => void;
+  categoryMenuOpen: boolean;
+  onToggleCategoryMenu: () => void;
+  onChangeCategory: (c: EntryCategory) => void;
 }
 
-function EntryCard({ entry, onEdit, onToggleDone, onDelete, expanded, onToggleOriginal }: EntryCardProps) {
+function EntryCard({
+  entry,
+  onEdit,
+  onToggleDone,
+  onDelete,
+  expanded,
+  onToggleOriginal,
+  categoryMenuOpen,
+  onToggleCategoryMenu,
+  onChangeCategory,
+}: EntryCardProps) {
   const catStyle = CATEGORY_STYLE[entry.category];
   return (
     <div className="lc-card p-4" style={{ opacity: entry.done ? 0.55 : 1 }}>
@@ -354,10 +426,36 @@ function EntryCard({ entry, onEdit, onToggleDone, onDelete, expanded, onToggleOr
           {entry.done ? '✓' : ''}
         </button>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className="lc-chip text-[11px]" style={{ background: catStyle.bg, color: catStyle.fg }}>
+          <div className="flex items-center gap-2 flex-wrap mb-1 relative">
+            <button
+              type="button"
+              onClick={onToggleCategoryMenu}
+              className="lc-chip text-[11px] inline-flex items-center gap-1"
+              style={{ background: catStyle.bg, color: catStyle.fg }}
+              aria-label="카테고리 변경"
+            >
               {ENTRY_CATEGORY_LABEL[entry.category]}
-            </span>
+              <span className="text-[9px] opacity-60">▾</span>
+            </button>
+            {categoryMenuOpen && (
+              <div className="absolute z-10 top-full left-0 mt-1 bg-white border border-[var(--color-border)] rounded-xl shadow-lg p-1 flex flex-col min-w-[140px]">
+                {(Object.keys(ENTRY_CATEGORY_LABEL) as EntryCategory[]).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => onChangeCategory(c)}
+                    className={
+                      'text-left text-[12px] px-3 py-1.5 rounded-lg ' +
+                      (c === entry.category
+                        ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] font-semibold'
+                        : 'lc-text-deep hover:bg-[var(--color-bg-soft)]')
+                    }
+                  >
+                    {ENTRY_CATEGORY_LABEL[c]}
+                  </button>
+                ))}
+              </div>
+            )}
             {entry.priority && entry.priority !== 'medium' && (
               <span className="inline-flex items-center gap-1 text-[11px] lc-text-mute">
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: PRIORITY_DOT[entry.priority] }} />

@@ -40,7 +40,7 @@ const ALL_TABS: Tab[] = [
 ];
 
 // 모바일 하단 - 핵심 4개만 고정 + 더보기
-const PRIMARY_MOBILE: TabKey[] = ['dashboard', 'chat', 'classes', 'purchase'];
+const PRIMARY_MOBILE: TabKey[] = ['chat', 'dashboard', 'classes', 'purchase'];
 const MORE_TABS: TabKey[] = ['journal', 'spots', 'checkin', 'projects', 'parking', 'move', 'subs', 'night', 'settings'];
 
 interface LayoutProps {

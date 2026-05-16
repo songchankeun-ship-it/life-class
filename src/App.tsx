@@ -32,7 +32,7 @@ import { initializeDefaultData, loadAllData, saveAllData } from './utils/storage
 import { todayISO } from './utils/date';
 
 export default function App() {
-  const [tab, setTab] = useState<TabKey>('dashboard');
+  const [tab, setTab] = useState<TabKey>('chat');
   const [data, setData] = useState<AppData | null>(null);
 
   useEffect(() => {

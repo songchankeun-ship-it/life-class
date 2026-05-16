@@ -18,6 +18,7 @@ import type {
   AppData,
   DailyCheckIn as DailyCheckInType,
   DailyPlan,
+  Entry,
   MoveChecklistItem,
   NightReview as NightReviewType,
   ParkingItem,
@@ -143,6 +144,7 @@ export default function App() {
   const updatePurchases = (purchases: Purchase[]) => {
     setData((prev) => (prev ? { ...prev, purchases } : prev));
   };
+
   const saveJournal = (entry: JournalEntry) => {
     setData((prev) => {
       if (!prev) return prev;
@@ -158,11 +160,31 @@ export default function App() {
   const addPurchases = (items: Purchase[]) => {
     setData((prev) => (prev ? { ...prev, purchases: [...items, ...prev.purchases] } : prev));
   };
+
   const appendChatMessages = (msgs: ChatMessage[]) => {
     setData((prev) => (prev ? { ...prev, chatMessages: [...prev.chatMessages, ...msgs] } : prev));
   };
 
+  const appendEntries = (newEntries: Entry[]) => {
+    setData((prev) => (prev ? { ...prev, entries: [...prev.entries, ...newEntries] } : prev));
+  };
 
+  const updateEntry = (entry: Entry) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        entries: prev.entries.map((e) => (e.id === entry.id ? entry : e)),
+      };
+    });
+  };
+
+  const deleteEntry = (id: string) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, entries: prev.entries.filter((e) => e.id !== id) };
+    });
+  };
 
   const saveReview = (review: NightReviewType) => {
     setData((prev) => {
@@ -202,8 +224,9 @@ export default function App() {
         <Chat
           data={data}
           onAppendMessages={appendChatMessages}
-          onAddParking={addParkings}
-          onAddPurchases={addPurchases}
+          onAppendEntries={appendEntries}
+          onUpdateEntry={updateEntry}
+          onDeleteEntry={deleteEntry}
         />
       )}
       {tab === 'journal' && (

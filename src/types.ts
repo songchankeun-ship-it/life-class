@@ -181,8 +181,8 @@ export interface Purchase {
 // ----- 일기 -----
 export interface JournalEntry {
   id: string;
-  date: string;          // YYYY-MM-DD
-  body: string;          // 자유 입력 본문
+  date: string;
+  body: string;
   extracted?: {
     todos: string[];
     purchases: string[];
@@ -206,8 +206,69 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
   extracted?: ExtractedItems;
+  entryIds?: string[];
   createdAt: string;
 }
+
+// ----- Entry (통합 항목 모델) -----
+export type EntryCategory =
+  | 'schedule'
+  | 'task'
+  | 'sourcing'
+  | 'subscription'
+  | 'idea'
+  | 'memo'
+  | 'parking'
+  | 'review';
+
+export type EntryType =
+  | 'schedule'
+  | 'task'
+  | 'purchase'
+  | 'subscription'
+  | 'idea'
+  | 'memo'
+  | 'parking'
+  | 'review';
+
+export type Priority = 'low' | 'medium' | 'high';
+
+export interface Entry {
+  id: string;
+  originalText: string;
+  title: string;
+  summary?: string;
+  category: EntryCategory;
+  type?: EntryType;
+  date?: string;
+  time?: string;
+  priority?: Priority;
+  amount?: number;
+  tags?: string[];
+  needsReminder?: boolean;
+  done?: boolean;
+  archived?: boolean;
+  messageId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const ENTRY_CATEGORY_LABEL: Record<EntryCategory, string> = {
+  schedule: '일정',
+  task: '할 일',
+  sourcing: '쇼핑·소싱',
+  subscription: '구독·결제',
+  idea: '아이디어',
+  memo: '메모',
+  parking: '보류',
+  review: '회고',
+};
+
+export const PRIORITY_LABEL: Record<Priority, string> = {
+  low: '낮음',
+  medium: '보통',
+  high: '높음',
+};
 
 // ----- 앱 설정 -----
 export interface AppSettings {
@@ -230,10 +291,10 @@ export interface AppData {
   purchases: Purchase[];
   journals: JournalEntry[];
   chatMessages: ChatMessage[];
+  entries: Entry[];
   settings: AppSettings;
 }
 
-// ----- 카테고리 라벨 -----
 export const CATEGORY_LABEL: Record<TaskCategory, string> = {
   move: '이사 / 마감',
   money: '돈 / 구독',

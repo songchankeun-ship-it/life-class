@@ -9,8 +9,8 @@ import type {
 
 const now = () => new Date().toISOString();
 
-export const APP_VERSION = '0.2.0';
-export const APP_NAME = '오늘의 교시';
+export const APP_VERSION = '0.3.0';
+export const APP_NAME = 'Aide';
 
 export const defaultSettings: AppSettings = {
   version: APP_VERSION,
@@ -25,9 +25,9 @@ export const defaultProjects: Project[] = [
     status: 'done',
     importance: 'mid',
     urgency: 'low',
-    description: '스마트스토어 이미지 제작 자동화 프로그램. 이제 개발보다는 실제 업무 적용과 개선점 기록 단계.',
+    description: '스마트스토어 이미지 제작 자동화 프로그램.',
     nextAction: '실제 업무 적용하며 개선점 1줄씩 기록',
-    memo: '완성됨. 메인 교시 후보에서는 제외, 점검 항목으로만 표시.',
+    memo: '완성됨.',
     createdAt: now(),
     updatedAt: now(),
     completed: true,
@@ -39,9 +39,9 @@ export const defaultProjects: Project[] = [
     status: 'active',
     importance: 'critical',
     urgency: 'high',
-    description: '실제 돈이 들어갈 수 있는 진지한 프로젝트. 실전 투입 전 리스크 관리, 백테스트, 소액 테스트 기준이 필요함.',
+    description: '실전 투입 전 리스크 관리, 백테스트, 소액 테스트 기준 필요.',
     nextAction: '손실 제한 기준 3가지 문장으로 적기',
-    memo: '실전 투자로 바로 넘어가지 말 것. 리스크 기준 정리가 먼저.',
+    memo: '리스크 기준 정리가 먼저.',
     createdAt: now(),
     updatedAt: now(),
   },
@@ -53,8 +53,8 @@ export const defaultProjects: Project[] = [
     importance: 'low',
     urgency: 'low',
     description: '여자친구와 재미로 만드는 비트윈 느낌의 커플앱.',
-    nextAction: '오늘은 손대지 않기 (선택교시 후보)',
-    memo: '취미 진행. 평일 메인 교시에는 넣지 말기.',
+    nextAction: '오늘은 손대지 않기',
+    memo: '취미 진행.',
     createdAt: now(),
     updatedAt: now(),
   },
@@ -65,9 +65,9 @@ export const defaultProjects: Project[] = [
     status: 'active',
     importance: 'high',
     urgency: 'mid',
-    description: '상품등록, 이미지 제작, 상세페이지, 리뷰 답글, CS, 행사 준비 등을 포함하는 상시 업무.',
+    description: '상품등록, 이미지 제작, 리뷰 답글, CS, 행사 준비 등.',
     nextAction: 'CS 답글 밀린 것 1건 처리',
-    memo: '상시 진행. 매일 작은 액션 1개씩.',
+    memo: '매일 작은 액션 1개씩.',
     createdAt: now(),
     updatedAt: now(),
   },
@@ -78,9 +78,9 @@ export const defaultProjects: Project[] = [
     status: 'active',
     importance: 'high',
     urgency: 'high',
-    description: 'OTT, AI툴, 앱 구독, 자동결제 정리. 안 쓰는 구독부터 해지.',
+    description: '안 쓰는 구독부터 해지.',
     nextAction: '안 쓰는 구독 1개만 해지',
-    memo: '고정비 절감 = 미래 수익. 미루지 말 것.',
+    memo: '고정비 절감 = 미래 수익.',
     createdAt: now(),
     updatedAt: now(),
   },
@@ -91,9 +91,9 @@ export const defaultProjects: Project[] = [
     status: 'active',
     importance: 'mid',
     urgency: 'high',
-    description: '이사 전 버릴 것, 가져갈 것, 보류할 것 분류. 옷 정리 포함.',
+    description: '이사 전 버릴 것, 가져갈 것, 보류할 것 분류.',
     nextAction: '쓰레기 1봉투만 만들기',
-    memo: '하루에 1봉투씩이면 이사 전까지 충분.',
+    memo: '하루에 1봉투씩.',
     createdAt: now(),
     updatedAt: now(),
   },
@@ -217,5 +217,6 @@ export const buildDefaultAppData = (): AppData => ({
   purchases: [],
   journals: [],
   chatMessages: [],
+  entries: [],
   settings: defaultSettings,
 });

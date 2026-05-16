@@ -19,6 +19,7 @@ export const STORAGE_KEYS = {
   purchases: 'lifeclass_purchases',
   journals: 'lifeclass_journals',
   chatMessages: 'lifeclass_chat',
+  entries: 'lifeclass_entries',
   aiApiKey: 'lifeclass_ai_key',
   settings: 'lifeclass_settings',
 } as const;
@@ -80,6 +81,7 @@ export function loadAllData(): AppData {
     purchases: getStorageItem('purchases', []),
     journals: getStorageItem('journals', []),
     chatMessages: getStorageItem('chatMessages', []),
+    entries: getStorageItem('entries', []),
     settings: getStorageItem('settings', base.settings),
   };
 }
@@ -97,6 +99,7 @@ export function saveAllData(data: AppData): void {
   setStorageItem('purchases', data.purchases);
   setStorageItem('journals', data.journals);
   setStorageItem('chatMessages', data.chatMessages);
+  setStorageItem('entries', data.entries);
   setStorageItem('settings', data.settings);
 }
 

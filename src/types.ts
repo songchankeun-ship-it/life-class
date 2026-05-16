@@ -258,10 +258,10 @@ export const TIME_LABEL: Record<TimeAvailability, string> = {
 };
 
 export const PERIOD_BASE: Record<ClassPeriod, { label: string; categoryLabel: string }> = {
-  period1: { label: '1교시', categoryLabel: '돈 / 미래 / 중요한 프로젝트' },
-  period2: { label: '2교시', categoryLabel: '마감 / 연락 / 이사 / 미루면 문제되는 일' },
-  period3: { label: '3교시', categoryLabel: '공간 / 몸 / 생활 정리' },
-  optional: { label: '선택교시', categoryLabel: '취미 / 관계 / 가벼운 프로젝트' },
+  period1: { label: '오전', categoryLabel: '돈 / 미래 / 중요한 프로젝트' },
+  period2: { label: '오후', categoryLabel: '마감 / 연락 / 이사 / 미루면 문제되는 일' },
+  period3: { label: '저녁', categoryLabel: '공간 / 몸 / 생활 정리' },
+  optional: { label: '자유', categoryLabel: '취미 / 관계 / 가벼운 프로젝트' },
 };
 
 export const IMPORTANCE_LABEL: Record<Importance, string> = {

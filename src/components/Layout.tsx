@@ -25,10 +25,10 @@ interface Tab {
 // 모든 탭 (데스크탑 상단)
 const ALL_TABS: Tab[] = [
   { key: 'dashboard', label: '대시보드', short: '홈' },
-  { key: 'chat', label: 'AI 비서', short: 'AI' },
+  { key: 'chat', label: 'Aide', short: 'Aide' },
   { key: 'journal', label: '오늘 일기', short: '일기' },
   { key: 'checkin', label: '아침 체크인', short: '아침' },
-  { key: 'classes', label: '오늘의 교시', short: '교시' },
+  { key: 'classes', label: '오늘', short: '오늘' },
   { key: 'projects', label: '프로젝트', short: '프로젝트' },
   { key: 'parking', label: '작업 주차장', short: '주차장' },
   { key: 'spots', label: '지정석', short: '지정석' },
@@ -64,10 +64,10 @@ export function Layout({ active, onChange, children }: LayoutProps) {
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-[10px] tracking-[0.18em] uppercase lc-text-mute font-medium">
-              Life Class
+              YOUR AIDE
             </div>
             <h1 className="text-lg sm:text-2xl font-semibold lc-text-deep tracking-tight">
-              오늘의 교시
+              Aide
             </h1>
           </div>
         </div>

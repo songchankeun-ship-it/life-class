@@ -99,10 +99,10 @@ export default function App() {
       const used = new Set(existingPlan?.blocks.map((b) => b.period) ?? []);
       const period = order.find((p) => !used.has(p)) ?? 'optional';
       const labelMap = {
-        period1: { label: '1교시', cat: '돈 / 미래 / 중요한 프로젝트' },
-        period2: { label: '2교시', cat: '마감 / 연락 / 이사 / 미루면 문제되는 일' },
-        period3: { label: '3교시', cat: '공간 / 몸 / 생활 정리' },
-        optional: { label: '선택교시', cat: '취미 / 관계 / 가벼운 프로젝트' },
+        period1: { label: '오전', cat: '돈 / 미래 / 중요한 프로젝트' },
+        period2: { label: '오후', cat: '마감 / 연락 / 이사 / 미루면 문제되는 일' },
+        period3: { label: '저녁', cat: '공간 / 몸 / 생활 정리' },
+        optional: { label: '자유', cat: '취미 / 관계 / 가벼운 프로젝트' },
       };
       const newBlock = {
         id: 'block-' + period + '-' + Math.random().toString(36).slice(2, 8),

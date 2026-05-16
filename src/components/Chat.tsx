@@ -98,7 +98,7 @@ export function Chat({ data, onAppendMessages, onAddParking, onAddPurchases }: C
     setError(null);
 
     try {
-      const res = await callAI(text, messages, key);
+      const res = await callAI(text, messages, key, data);
 
       const aiMsg: ChatMessage = {
         id: 'msg-' + Math.random().toString(36).slice(2, 10),

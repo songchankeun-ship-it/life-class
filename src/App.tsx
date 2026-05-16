@@ -12,6 +12,7 @@ import { NightReviewView } from './components/NightReview';
 import { Settings } from './components/Settings';
 import { SpotBoard } from './components/SpotBoard';
 import { PurchaseLog } from './components/PurchaseLog';
+import { Journal } from './components/Journal';
 import type {
   AppData,
   DailyCheckIn as DailyCheckInType,
@@ -21,6 +22,7 @@ import type {
   ParkingItem,
   Project,
   Purchase,
+  JournalEntry,
   SpotItem,
   SubscriptionItem,
 } from './types';
@@ -139,6 +141,22 @@ export default function App() {
   const updatePurchases = (purchases: Purchase[]) => {
     setData((prev) => (prev ? { ...prev, purchases } : prev));
   };
+  const saveJournal = (entry: JournalEntry) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      const others = prev.journals.filter((j) => j.id !== entry.id);
+      return { ...prev, journals: [entry, ...others] };
+    });
+  };
+
+  const addParkings = (items: ParkingItem[]) => {
+    setData((prev) => (prev ? { ...prev, parking: [...items, ...prev.parking] } : prev));
+  };
+
+  const addPurchases = (items: Purchase[]) => {
+    setData((prev) => (prev ? { ...prev, purchases: [...items, ...prev.purchases] } : prev));
+  };
+
 
   const saveReview = (review: NightReviewType) => {
     setData((prev) => {
@@ -174,6 +192,14 @@ export default function App() {
       )}
       {tab === 'spots' && <SpotBoard data={data} onUpdate={updateSpots} />}
       {tab === 'purchase' && <PurchaseLog data={data} onUpdate={updatePurchases} />}
+      {tab === 'journal' && (
+        <Journal
+          data={data}
+          onSaveJournal={saveJournal}
+          onAddParking={addParkings}
+          onAddPurchases={addPurchases}
+        />
+      )}
       {tab === 'move' && <MoveChecklistView data={data} onUpdate={updateMoveChecklist} />}
       {tab === 'subs' && <SubscriptionManager data={data} onUpdate={updateSubscriptions} />}
       {tab === 'night' && <NightReviewView data={data} onSave={saveReview} />}

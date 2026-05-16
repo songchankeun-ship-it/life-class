@@ -178,6 +178,21 @@ export interface Purchase {
   updatedAt: string;
 }
 
+// ----- 일기 -----
+export interface JournalEntry {
+  id: string;
+  date: string;          // YYYY-MM-DD
+  body: string;          // 자유 입력 본문
+  extracted?: {
+    todos: string[];
+    purchases: string[];
+    events: string[];
+    notes: string[];
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ----- 앱 설정 -----
 export interface AppSettings {
   version: string;
@@ -197,6 +212,7 @@ export interface AppData {
   reviews: Record<string, NightReview>;
   spots: SpotItem[];
   purchases: Purchase[];
+  journals: JournalEntry[];
   settings: AppSettings;
 }
 

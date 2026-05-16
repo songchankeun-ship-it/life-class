@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 export type TabKey =
   | 'dashboard'
+  | 'journal'
   | 'checkin'
   | 'classes'
   | 'projects'
@@ -23,6 +24,7 @@ interface Tab {
 // 모든 탭 (데스크탑 상단)
 const ALL_TABS: Tab[] = [
   { key: 'dashboard', label: '대시보드', short: '홈' },
+  { key: 'journal', label: '오늘 일기', short: '일기' },
   { key: 'checkin', label: '아침 체크인', short: '아침' },
   { key: 'classes', label: '오늘의 교시', short: '교시' },
   { key: 'projects', label: '프로젝트', short: '프로젝트' },
@@ -36,8 +38,8 @@ const ALL_TABS: Tab[] = [
 ];
 
 // 모바일 하단 - 핵심 4개만 고정 + 더보기
-const PRIMARY_MOBILE: TabKey[] = ['dashboard', 'classes', 'purchase', 'spots'];
-const MORE_TABS: TabKey[] = ['checkin', 'projects', 'parking', 'move', 'subs', 'night', 'settings'];
+const PRIMARY_MOBILE: TabKey[] = ['dashboard', 'journal', 'classes', 'purchase'];
+const MORE_TABS: TabKey[] = ['spots', 'checkin', 'projects', 'parking', 'move', 'subs', 'night', 'settings'];
 
 interface LayoutProps {
   active: TabKey;

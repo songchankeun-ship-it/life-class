@@ -17,6 +17,7 @@ export const STORAGE_KEYS = {
   reviews: 'lifeclass_reviews',
   spots: 'lifeclass_spots',
   purchases: 'lifeclass_purchases',
+  journals: 'lifeclass_journals',
   settings: 'lifeclass_settings',
 } as const;
 
@@ -75,6 +76,7 @@ export function loadAllData(): AppData {
     reviews: getStorageItem('reviews', {}),
     spots: getStorageItem('spots', base.spots),
     purchases: getStorageItem('purchases', []),
+    journals: getStorageItem('journals', []),
     settings: getStorageItem('settings', base.settings),
   };
 }
@@ -90,6 +92,7 @@ export function saveAllData(data: AppData): void {
   setStorageItem('reviews', data.reviews);
   setStorageItem('spots', data.spots);
   setStorageItem('purchases', data.purchases);
+  setStorageItem('journals', data.journals);
   setStorageItem('settings', data.settings);
 }
 

@@ -215,5 +215,6 @@ export const buildDefaultAppData = (): AppData => ({
   reviews: {},
   spots: defaultSpots,
   purchases: [],
+  journals: [],
   settings: defaultSettings,
 });

@@ -193,6 +193,22 @@ export interface JournalEntry {
   updatedAt: string;
 }
 
+// ----- 채팅 메시지 -----
+export interface ExtractedItems {
+  todos?: Array<{ title: string; category?: string }>;
+  purchases?: Array<{ name: string; category?: string; amount?: number }>;
+  events?: Array<{ title: string; date?: string }>;
+  notes?: string[];
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  extracted?: ExtractedItems;
+  createdAt: string;
+}
+
 // ----- 앱 설정 -----
 export interface AppSettings {
   version: string;
@@ -213,6 +229,7 @@ export interface AppData {
   spots: SpotItem[];
   purchases: Purchase[];
   journals: JournalEntry[];
+  chatMessages: ChatMessage[];
   settings: AppSettings;
 }
 

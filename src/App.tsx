@@ -13,6 +13,7 @@ import { Settings } from './components/Settings';
 import { SpotBoard } from './components/SpotBoard';
 import { PurchaseLog } from './components/PurchaseLog';
 import { Journal } from './components/Journal';
+import { Chat } from './components/Chat';
 import type {
   AppData,
   DailyCheckIn as DailyCheckInType,
@@ -23,6 +24,7 @@ import type {
   Project,
   Purchase,
   JournalEntry,
+  ChatMessage,
   SpotItem,
   SubscriptionItem,
 } from './types';
@@ -156,6 +158,10 @@ export default function App() {
   const addPurchases = (items: Purchase[]) => {
     setData((prev) => (prev ? { ...prev, purchases: [...items, ...prev.purchases] } : prev));
   };
+  const appendChatMessages = (msgs: ChatMessage[]) => {
+    setData((prev) => (prev ? { ...prev, chatMessages: [...prev.chatMessages, ...msgs] } : prev));
+  };
+
 
 
   const saveReview = (review: NightReviewType) => {
@@ -192,6 +198,14 @@ export default function App() {
       )}
       {tab === 'spots' && <SpotBoard data={data} onUpdate={updateSpots} />}
       {tab === 'purchase' && <PurchaseLog data={data} onUpdate={updatePurchases} />}
+      {tab === 'chat' && (
+        <Chat
+          data={data}
+          onAppendMessages={appendChatMessages}
+          onAddParking={addParkings}
+          onAddPurchases={addPurchases}
+        />
+      )}
       {tab === 'journal' && (
         <Journal
           data={data}

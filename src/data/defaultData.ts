@@ -216,5 +216,6 @@ export const buildDefaultAppData = (): AppData => ({
   spots: defaultSpots,
   purchases: [],
   journals: [],
+  chatMessages: [],
   settings: defaultSettings,
 });

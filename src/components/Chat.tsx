@@ -211,11 +211,13 @@ export function Chat({ data, onAppendMessages, onAddParking, onAddPurchases }: C
         className="flex-1 overflow-y-auto space-y-3 pb-2"
       >
         {messages.length === 0 && (
-          <div className="lc-card p-5 text-center">
-            <div className="text-base font-medium lc-text-deep mb-1">안녕하세요</div>
-            <div className="text-sm lc-text-soft leading-relaxed">
-              머릿속에 있는 거 그대로 던지세요.<br />
-              "오늘 계란쿠커 샀고 토요일 짐 정리해야돼" 같이.<br />
+          <div className="lc-card p-6 text-center">
+            <div className="text-lg font-semibold lc-text-deep mb-2">안녕하세요</div>
+            <div className="text-[15px] lc-text-soft leading-[1.75]">
+              머릿속에 있는 거 그대로 던지세요.
+              <br />
+              "계란쿠커 샀고 토요일 짐 정리해야돼" 같이 막.
+              <br />
               알아서 분류해서 정리해드릴게요.
             </div>
           </div>
@@ -228,13 +230,13 @@ export function Chat({ data, onAppendMessages, onAddParking, onAddPurchases }: C
           >
             <div
               className={
-                'max-w-[85%] rounded-2xl px-4 py-3 ' +
+                'max-w-[85%] rounded-[22px] px-5 py-3.5 ' +
                 (m.role === 'user'
                   ? 'bg-[var(--color-accent)] text-white'
                   : 'lc-card')
               }
             >
-              <div className="text-sm whitespace-pre-line leading-relaxed">{m.text}</div>
+              <div className="text-[15px] whitespace-pre-line leading-[1.65] font-normal">{m.text}</div>
               {m.extracted && hasItems(m.extracted) && (
                 <div className="mt-2 pt-2 border-t border-[rgba(255,255,255,0.2)] flex flex-wrap gap-1.5">
                   {(m.extracted.todos?.length ?? 0) > 0 && (

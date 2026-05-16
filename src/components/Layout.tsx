@@ -22,7 +22,6 @@ interface Tab {
   short?: string;
 }
 
-// 모든 탭 (데스크탑 상단)
 const ALL_TABS: Tab[] = [
   { key: 'dashboard', label: '대시보드', short: '홈' },
   { key: 'chat', label: 'Aide', short: 'Aide' },
@@ -39,7 +38,7 @@ const ALL_TABS: Tab[] = [
   { key: 'settings', label: '설정 / 백업', short: '설정' },
 ];
 
-// 모바일 하단 - 핵심 4개만 고정 + 더보기
+// 모바일 상단 핵심 4개 + 더보기
 const PRIMARY_MOBILE: TabKey[] = ['chat', 'dashboard', 'classes', 'purchase'];
 const MORE_TABS: TabKey[] = ['journal', 'spots', 'checkin', 'projects', 'parking', 'move', 'subs', 'night', 'settings'];
 
@@ -59,58 +58,95 @@ export function Layout({ active, onChange, children }: LayoutProps) {
 
   return (
     <div className="lc-bg-app min-h-screen w-full flex flex-col">
-      {/* 헤더 - 모바일에서는 매우 슬림 */}
-      <header className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2 max-w-screen-lg mx-auto w-full">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-[10px] tracking-[0.18em] uppercase lc-text-mute font-medium">
-              YOUR AIDE
+      {/* 상단 헤더 + 모바일 탭바 (sticky) */}
+      <div className="sticky top-0 z-40 bg-[var(--color-bg)]/90 backdrop-blur-md border-b border-[var(--color-border)] md:border-b-0">
+        <header className="px-4 sm:px-6 pt-3 sm:pt-6 pb-2 max-w-screen-lg mx-auto w-full">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[10px] tracking-[0.18em] uppercase lc-text-mute font-medium">
+                YOUR AIDE
+              </div>
+              <h1 className="text-lg sm:text-2xl font-semibold lc-text-deep tracking-tight">
+                Aide
+              </h1>
             </div>
-            <h1 className="text-lg sm:text-2xl font-semibold lc-text-deep tracking-tight">
-              Aide
-            </h1>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* 데스크탑: 상단 탭 */}
-      <nav className="px-4 sm:px-6 max-w-screen-lg mx-auto w-full hidden md:block">
-        <div className="lc-card p-1.5 flex items-center gap-1 overflow-x-auto">
-          {ALL_TABS.map((t) => {
-            const isActive = t.key === active;
-            return (
-              <button
-                key={t.key}
-                onClick={() => handleTabClick(t.key)}
-                className={
-                  'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap ' +
-                  (isActive
-                    ? 'bg-[var(--color-accent)] text-white'
-                    : 'lc-text-soft hover:bg-[var(--color-bg-soft)]')
-                }
-              >
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+        {/* 데스크탑: 상단 풀 탭 */}
+        <nav className="px-4 sm:px-6 pb-3 max-w-screen-lg mx-auto w-full hidden md:block">
+          <div className="lc-card p-1.5 flex items-center gap-1 overflow-x-auto">
+            {ALL_TABS.map((t) => {
+              const isActive = t.key === active;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => handleTabClick(t.key)}
+                  className={
+                    'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap ' +
+                    (isActive
+                      ? 'bg-[var(--color-accent)] text-white'
+                      : 'lc-text-soft hover:bg-[var(--color-bg-soft)]')
+                  }
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
 
-      <main className="px-4 sm:px-6 pt-3 sm:pt-4 pb-32 md:pb-10 max-w-screen-lg mx-auto w-full flex-1">
+        {/* 모바일: 상단 탭바 (헤더 아래) */}
+        <nav className="md:hidden px-3 pb-2 max-w-screen-lg mx-auto w-full">
+          <div className="grid grid-cols-5 gap-1">
+            {PRIMARY_MOBILE.map((k) => {
+              const tab = ALL_TABS.find((t) => t.key === k);
+              if (!tab) return null;
+              const isActive = tab.key === active && !moreOpen;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => handleTabClick(tab.key)}
+                  className={
+                    'py-2.5 rounded-xl text-[13px] font-medium transition-colors ' +
+                    (isActive
+                      ? 'bg-[var(--color-accent)] text-white'
+                      : 'lc-text-soft hover:bg-[var(--color-bg-soft)]')
+                  }
+                >
+                  {tab.short ?? tab.label}
+                </button>
+              );
+            })}
+            <button
+              onClick={() => setMoreOpen((v) => !v)}
+              className={
+                'py-2.5 rounded-xl text-[13px] font-medium transition-colors ' +
+                (moreOpen || MORE_TABS.includes(active)
+                  ? 'bg-[var(--color-accent)] text-white'
+                  : 'lc-text-soft hover:bg-[var(--color-bg-soft)]')
+              }
+            >
+              더보기
+            </button>
+          </div>
+        </nav>
+      </div>
+
+      <main className="px-4 sm:px-6 pt-3 sm:pt-4 pb-10 max-w-screen-lg mx-auto w-full flex-1">
         {children}
       </main>
 
-      {/* 모바일: 더보기 시트 */}
+      {/* 모바일: 더보기 시트 (상단 탭바 아래로 드롭다운) */}
       {moreOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/30 z-40"
+          className="md:hidden fixed inset-0 bg-black/30 z-30"
           onClick={() => setMoreOpen(false)}
         >
           <div
-            className="absolute bottom-[68px] left-0 right-0 bg-white rounded-t-3xl border-t border-[var(--color-border)] p-3 pb-5"
+            className="absolute top-[120px] left-3 right-3 bg-white rounded-2xl border border-[var(--color-border)] p-3 shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-10 h-1 bg-[var(--color-border)] rounded-full mx-auto mb-3" />
             <div className="grid grid-cols-3 gap-2">
               {MORE_TABS.map((k) => {
                 const tab = ALL_TABS.find((t) => t.key === k);
@@ -121,7 +157,7 @@ export function Layout({ active, onChange, children }: LayoutProps) {
                     key={tab.key}
                     onClick={() => handleTabClick(tab.key)}
                     className={
-                      'flex flex-col items-center justify-center gap-1 py-4 rounded-2xl text-sm font-medium ' +
+                      'flex items-center justify-center py-3.5 rounded-xl text-sm font-medium ' +
                       (isActive
                         ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
                         : 'bg-[var(--color-bg-soft)] lc-text-deep')
@@ -135,38 +171,6 @@ export function Layout({ active, onChange, children }: LayoutProps) {
           </div>
         </div>
       )}
-
-      {/* 모바일: 하단 탭 */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-[var(--color-border)] z-50 pb-[env(safe-area-inset-bottom)]">
-        <div className="grid grid-cols-5">
-          {PRIMARY_MOBILE.map((k) => {
-            const tab = ALL_TABS.find((t) => t.key === k);
-            if (!tab) return null;
-            const isActive = tab.key === active && !moreOpen;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => handleTabClick(tab.key)}
-                className={
-                  'py-3 text-[13px] font-medium ' +
-                  (isActive ? 'text-[var(--color-accent)]' : 'lc-text-mute')
-                }
-              >
-                {tab.short ?? tab.label}
-              </button>
-            );
-          })}
-          <button
-            onClick={() => setMoreOpen((v) => !v)}
-            className={
-              'py-3 text-[13px] font-medium ' +
-              (moreOpen || MORE_TABS.includes(active) ? 'text-[var(--color-accent)]' : 'lc-text-mute')
-            }
-          >
-            더보기
-          </button>
-        </div>
-      </nav>
     </div>
   );
 }

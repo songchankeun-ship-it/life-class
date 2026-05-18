@@ -9,6 +9,8 @@ import type {
 import { ENTRY_CATEGORY_LABEL, PRIORITY_LABEL } from '../types';
 import { callAI, getApiKey, makeFallbackEntry, setApiKey } from '../utils/ai';
 import { SectionCard } from './SectionCard';
+import { dDayLabel, todayISO } from '../utils/date';
+import { moveInfo } from '../data/defaultData';
 
 interface ChatProps {
   data: AppData;
@@ -18,19 +20,28 @@ interface ChatProps {
   onDeleteEntry: (id: string) => void;
 }
 
-type TabKey = 'all' | EntryCategory;
+// 5개로 축소된 탭 키
+type TabKey = 'all' | 'schedule' | 'task' | 'sourcing' | 'other';
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'all', label: '전체' },
   { key: 'schedule', label: '일정' },
   { key: 'task', label: '할 일' },
-  { key: 'sourcing', label: '쇼핑·소싱' },
-  { key: 'subscription', label: '구독·결제' },
-  { key: 'idea', label: '아이디어' },
-  { key: 'memo', label: '메모' },
-  { key: 'parking', label: '보류' },
-  { key: 'review', label: '회고' },
+  { key: 'sourcing', label: '쇼핑' },
+  { key: 'other', label: '그 외' },
 ];
+
+// 어떤 EntryCategory 가 어떤 탭에 속하는지
+const TAB_OF_CATEGORY: Record<EntryCategory, TabKey> = {
+  schedule: 'schedule',
+  task: 'task',
+  sourcing: 'sourcing',
+  subscription: 'other',
+  idea: 'other',
+  memo: 'other',
+  parking: 'other',
+  review: 'other',
+};
 
 const CATEGORY_STYLE: Record<EntryCategory, { bg: string; fg: string }> = {
   schedule: { bg: '#eef1fb', fg: '#3a5bbf' },
@@ -57,7 +68,7 @@ export function Chat({
   onDeleteEntry,
 }: ChatProps) {
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [inflight, setInflight] = useState(0); // 동시 진행 중인 AI 호출 수
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKeyLocal] = useState(getApiKey());
   const [showKeyInput, setShowKeyInput] = useState(!getApiKey());
@@ -65,26 +76,37 @@ export function Chat({
   const [editing, setEditing] = useState<Entry | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [categoryMenuId, setCategoryMenuId] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const messages = data.chatMessages;
   const entries = data.entries;
+
+  // 입력창 자동 높이 조절
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 140) + 'px';
+  }, [input]);
 
   useEffect(() => {
     if (activeTab === 'all' && scrollRef.current && !searchQuery) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages.length, loading, activeTab, searchQuery]);
+  }, [messages.length, inflight, activeTab, searchQuery]);
 
   const saveKey = () => {
     setApiKey(apiKey.trim());
     setShowKeyInput(false);
   };
 
-  const send = async () => {
+  // 낙관적 UI — 메시지 즉시 추가, AI 호출은 백그라운드
+  const send = () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if (!text) return;
     const key = getApiKey();
     if (!key) { setShowKeyInput(true); return; }
 
@@ -93,36 +115,38 @@ export function Chat({
     const userMsg: ChatMessage = { id: userMsgId, role: 'user', text, createdAt: stamp };
     onAppendMessages([userMsg]);
     setInput('');
-    setLoading(true);
     setError(null);
+    setInflight((n) => n + 1);
 
-    try {
-      const res = await callAI(text, messages, key, data, userMsgId);
-      const aiMsgId = 'msg-' + Math.random().toString(36).slice(2, 10);
-      const aiMsg: ChatMessage = {
-        id: aiMsgId,
-        role: 'assistant',
-        text: res.reply,
-        entryIds: res.entries.map((e) => e.id),
-        createdAt: new Date().toISOString(),
-      };
-      onAppendMessages([aiMsg]);
-      if (res.entries.length > 0) onAppendEntries(res.entries);
-    } catch (err) {
-      const fallback = makeFallbackEntry(text, userMsgId);
-      onAppendEntries([fallback]);
-      const failMsg: ChatMessage = {
-        id: 'msg-' + Math.random().toString(36).slice(2, 10),
-        role: 'assistant',
-        text: '(AI 응답 실패 — 일단 메모로 저장해뒀어요)',
-        entryIds: [fallback.id],
-        createdAt: new Date().toISOString(),
-      };
-      onAppendMessages([failMsg]);
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
+    (async () => {
+      try {
+        const res = await callAI(text, messages, key, data, userMsgId);
+        const aiMsgId = 'msg-' + Math.random().toString(36).slice(2, 10);
+        const aiMsg: ChatMessage = {
+          id: aiMsgId,
+          role: 'assistant',
+          text: res.reply,
+          entryIds: res.entries.map((e) => e.id),
+          createdAt: new Date().toISOString(),
+        };
+        onAppendMessages([aiMsg]);
+        if (res.entries.length > 0) onAppendEntries(res.entries);
+      } catch (err) {
+        const fallback = makeFallbackEntry(text, userMsgId);
+        onAppendEntries([fallback]);
+        const failMsg: ChatMessage = {
+          id: 'msg-' + Math.random().toString(36).slice(2, 10),
+          role: 'assistant',
+          text: '(잠깐 정신이 없네요. 일단 메모로 저장해뒀어요)',
+          entryIds: [fallback.id],
+          createdAt: new Date().toISOString(),
+        };
+        onAppendMessages([failMsg]);
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setInflight((n) => Math.max(0, n - 1));
+      }
+    })();
   };
 
   const q = searchQuery.trim().toLowerCase();
@@ -136,13 +160,18 @@ export function Chat({
     );
   };
 
+  const entryInTab = (e: Entry, tab: TabKey) => {
+    if (tab === 'all') return true;
+    return TAB_OF_CATEGORY[e.category] === tab;
+  };
+
   const filteredEntries = useMemo(() => {
     if (activeTab === 'all') {
-      if (q) return entries.filter(matchesQuery);
+      if (q) return entries.filter((e) => !e.archived && matchesQuery(e));
       return entries;
     }
     return entries
-      .filter((e) => e.category === activeTab && !e.archived && matchesQuery(e))
+      .filter((e) => entryInTab(e, activeTab) && !e.archived && matchesQuery(e))
       .sort((a, b) => {
         if ((a.done ?? false) !== (b.done ?? false)) return a.done ? 1 : -1;
         if (a.date && b.date) return a.date.localeCompare(b.date);
@@ -177,6 +206,42 @@ export function Chat({
     setCategoryMenuId(null);
   };
 
+  // Stat banner 데이터
+  const today = todayISO();
+  const purchaseTotal = useMemo(() => {
+    const now = new Date();
+    return data.purchases
+      .filter((p) => {
+        if (p.status === 'returned') return false;
+        const d = new Date(p.orderDate);
+        return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+      })
+      .reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  }, [data.purchases]);
+  const subsTotal = useMemo(
+    () =>
+      data.subscriptions
+        .filter((s) => s.usage !== 'cancelled')
+        .reduce((sum, s) => sum + (Number(s.amount) || 0), 0),
+    [data.subscriptions],
+  );
+  const todayAlerts = useMemo(
+    () => entries.filter((e) => !e.done && !e.archived && e.date === today).length,
+    [entries, today],
+  );
+
+  // 카테고리 카운트 (탭 배지)
+  const tabCounts = useMemo(() => {
+    const m: Record<TabKey, number> = { all: 0, schedule: 0, task: 0, sourcing: 0, other: 0 };
+    entries.forEach((e) => {
+      if (e.archived) return;
+      m.all += 1;
+      const t = TAB_OF_CATEGORY[e.category];
+      m[t] = (m[t] ?? 0) + 1;
+    });
+    return m;
+  }, [entries]);
+
   if (showKeyInput) {
     return (
       <SectionCard
@@ -207,61 +272,83 @@ export function Chat({
   }
 
   return (
-    <div className="flex flex-col gap-3" style={{ height: 'calc(100vh - 180px)' }}>
-      <div className="lc-card p-1.5 flex items-center gap-1 overflow-x-auto whitespace-nowrap">
-        {TABS.map((t) => {
-          const isActive = t.key === activeTab;
-          const count = t.key === 'all'
-            ? entries.length
-            : entries.filter((e) => e.category === t.key && !e.archived).length;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setActiveTab(t.key)}
-              className={
-                'px-3 py-1.5 rounded-lg text-[13px] font-medium flex items-center gap-1.5 ' +
-                (isActive
-                  ? 'bg-[var(--color-accent)] text-white'
-                  : 'lc-text-soft hover:bg-[var(--color-bg-soft)]')
-              }
-            >
-              {t.label}
-              {count > 0 && (
-                <span
-                  className={
-                    'text-[10px] px-1.5 py-0.5 rounded-full ' +
-                    (isActive ? 'bg-white/25 text-white' : 'bg-[var(--color-bg-soft)] lc-text-mute')
-                  }
-                >
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })}
+    <div className="flex flex-col gap-2.5" style={{ height: 'calc(100vh - 140px)' }}>
+      {/* Stat 배너 한 줄 */}
+      <div className="lc-card px-3 py-2 flex items-center gap-3 overflow-x-auto whitespace-nowrap text-[12px]">
+        <BannerStat label="이사 반출" value={dDayLabel(moveInfo.oldOutDate)} />
+        <BannerDivider />
+        <BannerStat label="이사 입주" value={dDayLabel(moveInfo.newInDate)} />
+        <BannerDivider />
+        <BannerStat label="이번달 구매" value={(purchaseTotal / 10000).toFixed(0) + '만원'} />
+        <BannerDivider />
+        <BannerStat label="월 구독" value={(subsTotal / 10000).toFixed(0) + '만원'} />
+        {todayAlerts > 0 && (
+          <>
+            <BannerDivider />
+            <BannerStat label="오늘 알림" value={todayAlerts + '건'} highlight />
+          </>
+        )}
       </div>
 
-      <div className="relative">
+      {/* 카테고리 탭바 + 검색 아이콘 */}
+      <div className="flex items-center gap-2">
+        <div className="lc-card p-1 flex items-center gap-0.5 flex-1 overflow-x-auto whitespace-nowrap">
+          {TABS.map((t) => {
+            const isActive = t.key === activeTab;
+            const count = tabCounts[t.key];
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setActiveTab(t.key)}
+                className={
+                  'px-3 py-1.5 rounded-lg text-[13px] font-medium flex items-center gap-1.5 ' +
+                  (isActive
+                    ? 'bg-[var(--color-accent)] text-white'
+                    : 'lc-text-soft hover:bg-[var(--color-bg-soft)]')
+                }
+              >
+                {t.label}
+                {count > 0 && (
+                  <span
+                    className={
+                      'text-[10px] px-1.5 py-0.5 rounded-full ' +
+                      (isActive ? 'bg-white/25 text-white' : 'bg-[var(--color-bg-soft)] lc-text-mute')
+                    }
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setSearchOpen((v) => !v);
+            if (searchOpen) setSearchQuery('');
+          }}
+          aria-label="검색"
+          className={
+            'lc-card w-10 h-10 flex items-center justify-center flex-shrink-0 ' +
+            (searchOpen || searchQuery ? 'lc-text-blue' : 'lc-text-soft')
+          }
+        >
+          {searchOpen ? '✕' : '🔍'}
+        </button>
+      </div>
+
+      {searchOpen && (
         <input
           type="text"
           className="lc-input"
           placeholder="제목·내용·태그로 검색"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ paddingRight: searchQuery ? 40 : 12 }}
+          autoFocus
         />
-        {searchQuery && (
-          <button
-            type="button"
-            onClick={() => setSearchQuery('')}
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md flex items-center justify-center lc-text-mute hover:bg-[var(--color-bg-soft)]"
-            aria-label="검색어 지우기"
-          >
-            ✕
-          </button>
-        )}
-      </div>
+      )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-2 pb-2">
         {activeTab === 'all' && !q && timelineItems.length === 0 && (
@@ -324,10 +411,12 @@ export function Chat({
           />
         ))}
 
-        {loading && (
+        {inflight > 0 && (
           <div className="flex justify-start">
-            <div className="lc-card px-4 py-3">
-              <div className="text-sm lc-text-soft">정리 중...</div>
+            <div className="lc-card px-4 py-2.5">
+              <div className="text-[12px] lc-text-soft">
+                정리 중{inflight > 1 ? ` (${inflight})` : ''}...
+              </div>
             </div>
           </div>
         )}
@@ -343,19 +432,29 @@ export function Chat({
         )}
       </div>
 
-      <div className="flex gap-2 sticky bottom-0">
+      {/* 입력창 — 1줄 시작, 자동 확장 */}
+      <div className="flex gap-2 items-end sticky bottom-0">
         <textarea
-          className="lc-input flex-1"
+          ref={inputRef}
+          className="lc-input flex-1 resize-none"
           placeholder="머릿속에 있는 거 던지세요..."
-          rows={2}
+          rows={1}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); }
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              send();
+            }
           }}
-          disabled={loading}
+          style={{ minHeight: 52, maxHeight: 140 }}
         />
-        <button type="button" className="lc-btn-primary" onClick={send} disabled={!input.trim() || loading}>
+        <button
+          type="button"
+          className="lc-btn-primary"
+          onClick={send}
+          disabled={!input.trim()}
+        >
           보내기
         </button>
       </div>
@@ -371,6 +470,31 @@ export function Chat({
   );
 }
 
+// ============================================================
+// Stat banner 헬퍼
+// ============================================================
+function BannerStat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+  return (
+    <div className="flex flex-col flex-shrink-0">
+      <span className="text-[10px] lc-text-mute leading-tight">{label}</span>
+      <span
+        className={
+          'text-[13px] font-semibold leading-tight ' +
+          (highlight ? 'text-[var(--color-warm)]' : 'lc-text-deep')
+        }
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+function BannerDivider() {
+  return <div className="w-px h-7 bg-[var(--color-border)] flex-shrink-0" />;
+}
+
+// ============================================================
+// Entry 카드 (미니멀: 한 줄 → 펼치면 상세)
+// ============================================================
 interface EntryCardProps {
   entry: Entry;
   expanded: boolean;
@@ -401,13 +525,11 @@ function EntryCard({
 
   return (
     <div className="lc-card" style={{ opacity: entry.done ? 0.55 : 1 }}>
-      {/* 한 줄 요약 — 펼치기 토글 */}
       <button
         type="button"
         className="w-full flex items-center gap-2.5 p-3 text-left"
         onClick={onToggleExpand}
       >
-        {/* 완료 토글 */}
         <span
           role="button"
           aria-label={entry.done ? '완료 취소' : '완료'}
@@ -423,23 +545,17 @@ function EntryCard({
         >
           {entry.done ? '✓' : ''}
         </span>
-
-        {/* 카테고리 점 (작은 색) */}
         <span
           className="w-2 h-2 rounded-full flex-shrink-0"
           style={{ background: catStyle.fg }}
           title={ENTRY_CATEGORY_LABEL[entry.category]}
         />
-
-        {/* 제목 */}
         <span
           className="text-[14px] lc-text-deep flex-1 min-w-0 truncate"
           style={{ textDecoration: entry.done ? 'line-through' : 'none' }}
         >
           {entry.title}
         </span>
-
-        {/* 우선순위 점 */}
         {entry.priority === 'high' && (
           <span
             className="w-1.5 h-1.5 rounded-full flex-shrink-0"
@@ -447,21 +563,16 @@ function EntryCard({
             title="높음"
           />
         )}
-
-        {/* 시간 */}
         {dateTimeText && (
           <span className="text-[11px] lc-text-mute flex-shrink-0 ml-1">
             {dateTimeText}
           </span>
         )}
-
-        {/* 펼치기 아이콘 */}
         <span className="text-[10px] lc-text-mute flex-shrink-0">
           {expanded ? '▲' : '▼'}
         </span>
       </button>
 
-      {/* 펼친 상세 */}
       {expanded && (
         <div className="px-3 pb-3 pt-1 border-t border-[var(--color-border-soft)] space-y-2">
           <div className="flex items-center gap-2 flex-wrap relative">
@@ -506,9 +617,7 @@ function EntryCard({
           </div>
 
           {entry.amount != null && entry.amount > 0 && (
-            <div className="text-[12px] lc-text-soft">
-              {entry.amount.toLocaleString()}원
-            </div>
+            <div className="text-[12px] lc-text-soft">{entry.amount.toLocaleString()}원</div>
           )}
 
           {entry.summary && (
@@ -544,6 +653,9 @@ function EntryCard({
   );
 }
 
+// ============================================================
+// 편집 모달
+// ============================================================
 interface EditModalProps {
   entry: Entry;
   onClose: () => void;

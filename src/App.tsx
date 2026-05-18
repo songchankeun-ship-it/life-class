@@ -1,15 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { TabKey } from './components/Layout';
 import { Layout } from './components/Layout';
-import { Dashboard } from './components/Dashboard';
 import { Settings } from './components/Settings';
 import { Chat } from './components/Chat';
-import type {
-  AppData,
-  ChatMessage,
-  Entry,
-} from './types';
+import type { AppData, ChatMessage, Entry } from './types';
 import { initializeDefaultData, loadAllData, saveAllData } from './utils/storage';
+import { autoDailyDigest, scheduleEntryReminders } from './utils/notify';
 
 export default function App() {
   const [tab, setTab] = useState<TabKey>('chat');
@@ -22,6 +18,20 @@ export default function App() {
 
   useEffect(() => {
     if (data) saveAllData(data);
+  }, [data]);
+
+  // 앱 처음 로드 시 — 오늘 디지스트 1회 자동 발송
+  useEffect(() => {
+    if (!data) return;
+    autoDailyDigest(data.entries).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!data]);
+
+  // entries 가 바뀔 때마다 임박한 알림 재스케줄
+  useEffect(() => {
+    if (!data) return;
+    const cleanup = scheduleEntryReminders(data.entries);
+    return cleanup;
   }, [data]);
 
   const reload = useCallback(() => {
@@ -78,12 +88,6 @@ export default function App() {
           onAppendEntries={appendEntries}
           onUpdateEntry={updateEntry}
           onDeleteEntry={deleteEntry}
-        />
-      )}
-      {tab === 'dashboard' && (
-        <Dashboard
-          data={data}
-          onGoChat={() => goto('chat')}
         />
       )}
       {tab === 'settings' && <Settings data={data} onReload={reload} />}

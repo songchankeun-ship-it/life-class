@@ -63,7 +63,7 @@ export function Chat({
   const [showKeyInput, setShowKeyInput] = useState(!getApiKey());
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [editing, setEditing] = useState<Entry | null>(null);
-  const [expandedOriginalId, setExpandedOriginalId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [categoryMenuId, setCategoryMenuId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -90,12 +90,7 @@ export function Chat({
 
     const stamp = new Date().toISOString();
     const userMsgId = 'msg-' + Math.random().toString(36).slice(2, 10);
-    const userMsg: ChatMessage = {
-      id: userMsgId,
-      role: 'user',
-      text,
-      createdAt: stamp,
-    };
+    const userMsg: ChatMessage = { id: userMsgId, role: 'user', text, createdAt: stamp };
     onAppendMessages([userMsg]);
     setInput('');
     setLoading(true);
@@ -130,7 +125,6 @@ export function Chat({
     }
   };
 
-  // 검색
   const q = searchQuery.trim().toLowerCase();
   const matchesQuery = (e: Entry) => {
     if (!q) return true;
@@ -144,7 +138,6 @@ export function Chat({
 
   const filteredEntries = useMemo(() => {
     if (activeTab === 'all') {
-      // 전체 탭 + 검색일 때만 cards 만 보여줌
       if (q) return entries.filter(matchesQuery);
       return entries;
     }
@@ -162,7 +155,7 @@ export function Chat({
 
   const timelineItems = useMemo(() => {
     if (activeTab !== 'all') return [];
-    if (q) return []; // 검색 중에는 타임라인 대신 검색 결과
+    if (q) return [];
     type Item =
       | { kind: 'msg'; msg: ChatMessage }
       | { kind: 'entry'; entry: Entry };
@@ -215,7 +208,6 @@ export function Chat({
 
   return (
     <div className="flex flex-col gap-3" style={{ height: 'calc(100vh - 180px)' }}>
-      {/* 카테고리 탭바 */}
       <div className="lc-card p-1.5 flex items-center gap-1 overflow-x-auto whitespace-nowrap">
         {TABS.map((t) => {
           const isActive = t.key === activeTab;
@@ -250,7 +242,6 @@ export function Chat({
         })}
       </div>
 
-      {/* 검색창 */}
       <div className="relative">
         <input
           type="text"
@@ -272,14 +263,12 @@ export function Chat({
         )}
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 pb-2">
-        {/* 전체 탭, 검색 없음 → 타임라인 */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-2 pb-2">
         {activeTab === 'all' && !q && timelineItems.length === 0 && (
           <div className="lc-card p-6 text-center">
             <div className="text-lg font-semibold lc-text-deep mb-2">안녕하세요</div>
             <div className="text-[15px] lc-text-soft leading-[1.75]">
               머릿속에 있는 거 그대로 던지세요.<br />
-              "계란쿠커 샀고 토요일 짐 정리해야돼" 같이 막.<br />
               알아서 분류해서 정리해드릴게요.
             </div>
           </div>
@@ -300,11 +289,11 @@ export function Chat({
               <EntryCard
                 key={'entry-' + item.entry.id + '-' + idx}
                 entry={item.entry}
-                onEdit={() => setEditing(item.entry)}
+                expanded={expandedId === item.entry.id}
+                onToggleExpand={() => setExpandedId(expandedId === item.entry.id ? null : item.entry.id)}
                 onToggleDone={() => onUpdateEntry({ ...item.entry, done: !item.entry.done, updatedAt: new Date().toISOString() })}
+                onEdit={() => setEditing(item.entry)}
                 onDelete={() => { if (confirm('이 항목을 삭제할까요?')) onDeleteEntry(item.entry.id); }}
-                expanded={expandedOriginalId === item.entry.id}
-                onToggleOriginal={() => setExpandedOriginalId(expandedOriginalId === item.entry.id ? null : item.entry.id)}
                 categoryMenuOpen={categoryMenuId === item.entry.id}
                 onToggleCategoryMenu={() => setCategoryMenuId(categoryMenuId === item.entry.id ? null : item.entry.id)}
                 onChangeCategory={(c) => handleCategoryChange(item.entry, c)}
@@ -313,7 +302,6 @@ export function Chat({
           }
         })}
 
-        {/* 카테고리 탭 or 검색 → 카드 리스트 */}
         {(activeTab !== 'all' || q) && filteredEntries.length === 0 && (
           <div className="lc-card p-6 text-center">
             <div className="text-sm lc-text-soft">
@@ -325,11 +313,11 @@ export function Chat({
           <EntryCard
             key={e.id}
             entry={e}
-            onEdit={() => setEditing(e)}
+            expanded={expandedId === e.id}
+            onToggleExpand={() => setExpandedId(expandedId === e.id ? null : e.id)}
             onToggleDone={() => onUpdateEntry({ ...e, done: !e.done, updatedAt: new Date().toISOString() })}
+            onEdit={() => setEditing(e)}
             onDelete={() => { if (confirm('이 항목을 삭제할까요?')) onDeleteEntry(e.id); }}
-            expanded={expandedOriginalId === e.id}
-            onToggleOriginal={() => setExpandedOriginalId(expandedOriginalId === e.id ? null : e.id)}
             categoryMenuOpen={categoryMenuId === e.id}
             onToggleCategoryMenu={() => setCategoryMenuId(categoryMenuId === e.id ? null : e.id)}
             onChangeCategory={(c) => handleCategoryChange(e, c)}
@@ -385,11 +373,11 @@ export function Chat({
 
 interface EntryCardProps {
   entry: Entry;
-  onEdit: () => void;
-  onToggleDone: () => void;
-  onDelete: () => void;
   expanded: boolean;
-  onToggleOriginal: () => void;
+  onToggleExpand: () => void;
+  onToggleDone: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
   categoryMenuOpen: boolean;
   onToggleCategoryMenu: () => void;
   onChangeCategory: (c: EntryCategory) => void;
@@ -397,24 +385,34 @@ interface EntryCardProps {
 
 function EntryCard({
   entry,
-  onEdit,
-  onToggleDone,
-  onDelete,
   expanded,
-  onToggleOriginal,
+  onToggleExpand,
+  onToggleDone,
+  onEdit,
+  onDelete,
   categoryMenuOpen,
   onToggleCategoryMenu,
   onChangeCategory,
 }: EntryCardProps) {
   const catStyle = CATEGORY_STYLE[entry.category];
+  const dateTimeText = entry.date
+    ? entry.date + (entry.time ? ' ' + entry.time : '')
+    : entry.time ?? null;
+
   return (
-    <div className="lc-card p-4" style={{ opacity: entry.done ? 0.55 : 1 }}>
-      <div className="flex items-start gap-2 mb-2">
-        <button
-          type="button"
-          onClick={onToggleDone}
+    <div className="lc-card" style={{ opacity: entry.done ? 0.55 : 1 }}>
+      {/* 한 줄 요약 — 펼치기 토글 */}
+      <button
+        type="button"
+        className="w-full flex items-center gap-2.5 p-3 text-left"
+        onClick={onToggleExpand}
+      >
+        {/* 완료 토글 */}
+        <span
+          role="button"
           aria-label={entry.done ? '완료 취소' : '완료'}
-          className="mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0"
+          onClick={(e) => { e.stopPropagation(); onToggleDone(); }}
+          className="w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 cursor-pointer"
           style={{
             borderColor: entry.done ? 'var(--color-accent)' : 'var(--color-border)',
             background: entry.done ? 'var(--color-accent)' : 'transparent',
@@ -424,9 +422,49 @@ function EntryCard({
           }}
         >
           {entry.done ? '✓' : ''}
-        </button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1 relative">
+        </span>
+
+        {/* 카테고리 점 (작은 색) */}
+        <span
+          className="w-2 h-2 rounded-full flex-shrink-0"
+          style={{ background: catStyle.fg }}
+          title={ENTRY_CATEGORY_LABEL[entry.category]}
+        />
+
+        {/* 제목 */}
+        <span
+          className="text-[14px] lc-text-deep flex-1 min-w-0 truncate"
+          style={{ textDecoration: entry.done ? 'line-through' : 'none' }}
+        >
+          {entry.title}
+        </span>
+
+        {/* 우선순위 점 */}
+        {entry.priority === 'high' && (
+          <span
+            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+            style={{ background: PRIORITY_DOT.high }}
+            title="높음"
+          />
+        )}
+
+        {/* 시간 */}
+        {dateTimeText && (
+          <span className="text-[11px] lc-text-mute flex-shrink-0 ml-1">
+            {dateTimeText}
+          </span>
+        )}
+
+        {/* 펼치기 아이콘 */}
+        <span className="text-[10px] lc-text-mute flex-shrink-0">
+          {expanded ? '▲' : '▼'}
+        </span>
+      </button>
+
+      {/* 펼친 상세 */}
+      {expanded && (
+        <div className="px-3 pb-3 pt-1 border-t border-[var(--color-border-soft)] space-y-2">
+          <div className="flex items-center gap-2 flex-wrap relative">
             <button
               type="button"
               onClick={onToggleCategoryMenu}
@@ -466,27 +504,19 @@ function EntryCard({
               <span className="text-[11px] lc-text-mute">알림</span>
             )}
           </div>
-          <div
-            className="text-[15px] font-semibold lc-text-deep leading-[1.4]"
-            style={{ textDecoration: entry.done ? 'line-through' : 'none' }}
-          >
-            {entry.title}
-          </div>
-          {(entry.date || entry.time) && (
-            <div className="text-[12px] lc-text-soft mt-0.5">
-              {entry.date}{entry.time && ' ' + entry.time}
-            </div>
-          )}
+
           {entry.amount != null && entry.amount > 0 && (
-            <div className="text-[12px] lc-text-soft mt-0.5">
+            <div className="text-[12px] lc-text-soft">
               {entry.amount.toLocaleString()}원
             </div>
           )}
+
           {entry.summary && (
-            <div className="text-[13px] lc-text-soft leading-[1.55] mt-1.5">{entry.summary}</div>
+            <div className="text-[13px] lc-text-soft leading-[1.55]">{entry.summary}</div>
           )}
+
           {entry.tags && entry.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
+            <div className="flex flex-wrap gap-1">
               {entry.tags.map((t, i) => (
                 <span key={i} className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--color-bg-soft)] lc-text-soft">
                   #{t}
@@ -494,23 +524,22 @@ function EntryCard({
               ))}
             </div>
           )}
-        </div>
-      </div>
 
-      {expanded && (
-        <div className="mt-2 pt-2 border-t border-[var(--color-border-soft)]">
-          <div className="text-[11px] lc-text-mute mb-1">원문</div>
-          <div className="text-[13px] lc-text-soft whitespace-pre-line leading-[1.55]">{entry.originalText}</div>
+          {entry.originalText && entry.originalText !== entry.title && (
+            <div className="pt-1.5">
+              <div className="text-[10px] lc-text-mute mb-1">원문</div>
+              <div className="text-[12px] lc-text-soft whitespace-pre-line leading-[1.5]">
+                {entry.originalText}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 pt-1 text-[12px]">
+            <button type="button" onClick={onEdit} className="lc-text-blue">수정</button>
+            <button type="button" onClick={onDelete} className="text-[var(--color-danger)] ml-auto">삭제</button>
+          </div>
         </div>
       )}
-
-      <div className="flex items-center gap-3 mt-3 text-[12px]">
-        <button type="button" onClick={onToggleOriginal} className="lc-text-blue">
-          {expanded ? '원문 닫기' : '원문 보기'}
-        </button>
-        <button type="button" onClick={onEdit} className="lc-text-soft">수정</button>
-        <button type="button" onClick={onDelete} className="text-[var(--color-danger)] ml-auto">삭제</button>
-      </div>
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Chat } from './components/Chat';
 import type { AppData, ChatMessage, Entry } from './types';
 import { initializeDefaultData, loadAllData, saveAllData } from './utils/storage';
 import { autoDailyDigest, scheduleEntryReminders } from './utils/notify';
+import { scheduleSync } from './utils/cloudSync';
 
 export default function App() {
   const [tab, setTab] = useState<TabKey>('chat');
@@ -27,10 +28,11 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [!!data]);
 
-  // entries 가 바뀔 때마다 임박한 알림 재스케줄
+  // entries 가 바뀔 때마다 임박한 알림 재스케줄 + 클라우드 sync
   useEffect(() => {
     if (!data) return;
     const cleanup = scheduleEntryReminders(data.entries);
+    scheduleSync(data.entries);
     return cleanup;
   }, [data]);
 

@@ -93,9 +93,14 @@ function getSentSet(): Set<string> {
 }
 function saveSentSet(set: Set<string>): void {
   if (typeof window === 'undefined') return;
-  // 오래된 ID (어제 이전 날짜) 청소
+  // 오래된 ID (어제 이전 날짜) 청소. ID 포맷: "entryId:YYYY-MM-DD"
   const today = todayISO();
-  const trimmed = Array.from(set).filter((id) => id.endsWith(today) || id > today);
+  const trimmed = Array.from(set).filter((id) => {
+    const idx = id.lastIndexOf(':');
+    if (idx < 0) return false;
+    const datePart = id.slice(idx + 1);
+    return datePart >= today;
+  });
   window.localStorage.setItem(SENT_REMINDER_KEY, JSON.stringify(trimmed));
 }
 

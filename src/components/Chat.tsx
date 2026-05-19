@@ -60,6 +60,14 @@ const PRIORITY_DOT: Record<Priority, string> = {
   high: '#b76a6a',
 };
 
+// 한국식 짧은 금액 표기 — 1만원 미만은 원 단위, 그 이상은 만원 단위
+function formatMoneyShort(n: number): string {
+  if (n < 10000) return n.toLocaleString() + '원';
+  const man = n / 10000;
+  if (man < 10) return man.toFixed(1).replace(/\.0$/, '') + '만원';
+  return Math.round(man).toLocaleString() + '만원';
+}
+
 export function Chat({
   data,
   onAppendMessages,
@@ -279,9 +287,9 @@ export function Chat({
         <BannerDivider />
         <BannerStat label="이사 입주" value={dDayLabel(moveInfo.newInDate)} />
         <BannerDivider />
-        <BannerStat label="이번달 구매" value={(purchaseTotal / 10000).toFixed(0) + '만원'} />
+        <BannerStat label="이번달 구매" value={formatMoneyShort(purchaseTotal)} />
         <BannerDivider />
-        <BannerStat label="월 구독" value={(subsTotal / 10000).toFixed(0) + '만원'} />
+        <BannerStat label="월 구독" value={formatMoneyShort(subsTotal)} />
         {todayAlerts > 0 && (
           <>
             <BannerDivider />

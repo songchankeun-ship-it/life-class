@@ -16,6 +16,13 @@ import {
   setTelegramConfig,
   setLastDigestDate,
 } from '../utils/notify';
+import {
+  getCloudConfig,
+  pingCloud,
+  setCloudConfig,
+  syncNow,
+  triggerDigest,
+} from '../utils/cloudSync';
 import { todayISO } from '../utils/date';
 
 interface SettingsProps {
@@ -99,6 +106,8 @@ export function Settings({ data, onReload }: SettingsProps) {
       </SectionCard>
 
       <TelegramSection data={data} onFlash={flash} />
+
+      <CloudSection data={data} onFlash={flash} />
 
       <LegacyDataPreview data={data} />
 
@@ -413,6 +422,151 @@ function TelegramSection({ data, onFlash }: TelegramSectionProps) {
             지금 오늘 일정 보내기
           </button>
         </div>
+      )}
+    </SectionCard>
+  );
+}
+
+interface CloudSectionProps {
+  data: AppData;
+  onFlash: (s: string) => void;
+}
+
+function CloudSection({ data, onFlash }: CloudSectionProps) {
+  const initial = getCloudConfig();
+  const [url, setUrl] = useState(initial.url);
+  const [key, setKey] = useState(initial.key);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string>('');
+  const [open, setOpen] = useState(!initial.url || !initial.key);
+  const configured = initial.url && initial.key;
+
+  const save = () => {
+    setCloudConfig(url.trim(), key.trim());
+    onFlash('클라우드 설정 저장됨');
+    setOpen(false);
+  };
+
+  const ping = async () => {
+    setBusy(true);
+    setStatus('');
+    setCloudConfig(url.trim(), key.trim());
+    const r = await pingCloud();
+    setStatus(r.message);
+    setBusy(false);
+  };
+
+  const sync = async () => {
+    setBusy(true);
+    setStatus('');
+    setCloudConfig(url.trim(), key.trim());
+    const r = await syncNow(data.entries);
+    setStatus(r.message);
+    if (r.ok) onFlash(r.message);
+    setBusy(false);
+  };
+
+  const digest = async () => {
+    setBusy(true);
+    setStatus('');
+    const r = await triggerDigest();
+    setStatus(r.message);
+    if (r.ok) onFlash('디지스트 발송 요청');
+    setBusy(false);
+  };
+
+  return (
+    <SectionCard
+      title="클라우드 알림 (백그라운드)"
+      subtitle={
+        configured
+          ? '연결됨 — 앱 안 열어도 일정 시간에 텔레그램 알림이 와요.'
+          : 'Cloudflare Worker 를 설정하면 진짜 백그라운드 알림이 됩니다.'
+      }
+      right={
+        <button type="button" className="lc-btn-ghost" onClick={() => setOpen((v) => !v)}>
+          {open ? '접기' : '설정'}
+        </button>
+      }
+    >
+      {open && (
+        <div className="space-y-3">
+          <p className="text-[12px] lc-text-soft leading-relaxed">
+            설정 방법은 GitHub 저장소의{' '}
+            <code className="text-[11px] bg-[var(--color-bg-soft)] px-1 rounded">
+              cloud-worker/SETUP.md
+            </code>{' '}
+            참고 (5~10분).
+          </p>
+          <label className="block">
+            <span className="lc-section-title">Worker URL</span>
+            <input
+              className="lc-input mt-1"
+              placeholder="https://aide-notifier.xxx.workers.dev"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
+          </label>
+          <label className="block">
+            <span className="lc-section-title">Sync Key</span>
+            <input
+              className="lc-input mt-1"
+              type="password"
+              placeholder="Worker 시크릿 SYNC_KEY 와 동일"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="lc-btn-primary"
+              onClick={save}
+              disabled={!url.trim() || !key.trim()}
+            >
+              저장
+            </button>
+            <button
+              type="button"
+              className="lc-btn-ghost"
+              onClick={ping}
+              disabled={!url.trim() || busy}
+            >
+              연결 확인
+            </button>
+            <button
+              type="button"
+              className="lc-btn-ghost"
+              onClick={sync}
+              disabled={!url.trim() || !key.trim() || busy}
+            >
+              지금 동기화
+            </button>
+          </div>
+        </div>
+      )}
+      {configured && (
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-[var(--color-border-soft)] mt-3">
+          <button
+            type="button"
+            className="lc-btn-ghost"
+            onClick={sync}
+            disabled={busy}
+          >
+            지금 동기화
+          </button>
+          <button
+            type="button"
+            className="lc-btn-ghost"
+            onClick={digest}
+            disabled={busy}
+          >
+            지금 디지스트 발송
+          </button>
+        </div>
+      )}
+      {status && (
+        <div className="text-[11px] lc-text-mute mt-2">→ {status}</div>
       )}
     </SectionCard>
   );

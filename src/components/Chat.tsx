@@ -86,8 +86,12 @@ export function Chat({
   const [categoryMenuId, setCategoryMenuId] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<unknown>(null);
+  const recordingBaseRef = useRef<string>('');
 
   const messages = data.chatMessages;
   const entries = data.entries;
@@ -212,6 +216,92 @@ export function Chat({
   const handleCategoryChange = (entry: Entry, newCat: EntryCategory) => {
     onUpdateEntry({ ...entry, category: newCat, updatedAt: new Date().toISOString() });
     setCategoryMenuId(null);
+  };
+
+  // 브라우저 음성 인식 지원 여부 1회 체크
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const w = window as unknown as Record<string, unknown>;
+    const SR = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+    if (!SR) setSpeechSupported(false);
+  }, []);
+
+  const toggleRecording = () => {
+    if (typeof window === 'undefined') return;
+    const w = window as unknown as Record<string, unknown>;
+    const SRCtor = (w.SpeechRecognition ?? w.webkitSpeechRecognition) as
+      | (new () => unknown)
+      | undefined;
+    if (!SRCtor) {
+      alert('이 브라우저는 음성 인식을 지원하지 않아요. 크롬이나 사파리에서 시도해주세요.');
+      return;
+    }
+
+    // 이미 녹음 중이면 정지
+    if (isRecording) {
+      const cur = recognitionRef.current as { stop?: () => void } | null;
+      cur?.stop?.();
+      setIsRecording(false);
+      return;
+    }
+
+    try {
+      const rec = new SRCtor() as {
+        lang: string;
+        continuous: boolean;
+        interimResults: boolean;
+        onresult: (e: unknown) => void;
+        onend: () => void;
+        onerror: (e: unknown) => void;
+        start: () => void;
+        stop: () => void;
+      };
+      rec.lang = 'ko-KR';
+      rec.continuous = true;
+      rec.interimResults = true;
+
+      // 시작 시점 input 값을 base 로 잡고, 그 위에 transcribed text를 이어붙임
+      recordingBaseRef.current = input;
+
+      rec.onresult = (event: unknown) => {
+        const e = event as {
+          resultIndex: number;
+          results: { isFinal: boolean; 0: { transcript: string } }[];
+        };
+        let finalPart = '';
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) finalPart += t;
+          else interim += t;
+        }
+        if (finalPart) {
+          recordingBaseRef.current = (recordingBaseRef.current + ' ' + finalPart).trim();
+        }
+        setInput((recordingBaseRef.current + ' ' + interim).trim());
+      };
+
+      rec.onend = () => {
+        setIsRecording(false);
+      };
+
+      rec.onerror = (event: unknown) => {
+        const err = event as { error?: string };
+        console.warn('speech error', err.error);
+        if (err.error === 'not-allowed' || err.error === 'service-not-allowed') {
+          alert('마이크 권한이 거부됐어요. 브라우저 설정에서 허용해주세요.');
+        }
+        setIsRecording(false);
+      };
+
+      rec.start();
+      recognitionRef.current = rec;
+      setIsRecording(true);
+    } catch (err) {
+      console.warn('speech start failed', err);
+      alert('음성 인식 시작에 실패했어요: ' + (err instanceof Error ? err.message : String(err)));
+      setIsRecording(false);
+    }
   };
 
   // Stat banner 데이터
@@ -457,6 +547,24 @@ export function Chat({
           }}
           style={{ minHeight: 52, maxHeight: 140 }}
         />
+        {speechSupported && (
+          <button
+            type="button"
+            onClick={toggleRecording}
+            aria-label={isRecording ? '녹음 정지' : '음성으로 던지기'}
+            className="flex items-center justify-center rounded-2xl border border-[var(--color-border)] bg-white"
+            style={{
+              minHeight: 52,
+              width: 52,
+              fontSize: 22,
+              color: isRecording ? '#ffffff' : 'var(--color-text-soft)',
+              background: isRecording ? 'var(--color-danger)' : '#ffffff',
+              animation: isRecording ? 'lc-pulse 1.2s ease-in-out infinite' : 'none',
+            }}
+          >
+            {isRecording ? '⏹' : '🎤'}
+          </button>
+        )}
         <button
           type="button"
           className="lc-btn-primary"

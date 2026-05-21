@@ -101,7 +101,11 @@ function saveSentSet(set: Set<string>): void {
     const datePart = id.slice(idx + 1);
     return datePart >= today;
   });
-  window.localStorage.setItem(SENT_REMINDER_KEY, JSON.stringify(trimmed));
+  try {
+    window.localStorage.setItem(SENT_REMINDER_KEY, JSON.stringify(trimmed));
+  } catch (err) {
+    console.warn('[notify] saveSentSet failed', err);
+  }
 }
 
 export function hasReminderSent(entryId: string): boolean {

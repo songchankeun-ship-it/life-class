@@ -18,19 +18,23 @@ import {
 } from '../utils/notify';
 import {
   getCloudConfig,
+  getSyncStatus,
   pingCloud,
   setCloudConfig,
   syncNow,
   triggerDigest,
 } from '../utils/cloudSync';
+import { countArchived, purgeArchived, unarchiveAll } from '../utils/archive';
 import { todayISO } from '../utils/date';
+import type { Entry } from '../types';
 
 interface SettingsProps {
   data: AppData;
   onReload: () => void;
+  onSetEntries: (entries: Entry[]) => void;
 }
 
-export function Settings({ data, onReload }: SettingsProps) {
+export function Settings({ data, onReload, onSetEntries }: SettingsProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -108,6 +112,8 @@ export function Settings({ data, onReload }: SettingsProps) {
       <TelegramSection data={data} onFlash={flash} />
 
       <CloudSection data={data} onFlash={flash} />
+
+      <ArchiveSection data={data} onSetEntries={onSetEntries} onFlash={flash} />
 
       <LegacyDataPreview data={data} />
 
@@ -546,27 +552,106 @@ function CloudSection({ data, onFlash }: CloudSectionProps) {
         </div>
       )}
       {configured && (
-        <div className="flex flex-wrap gap-2 pt-2 border-t border-[var(--color-border-soft)] mt-3">
-          <button
-            type="button"
-            className="lc-btn-ghost"
-            onClick={sync}
-            disabled={busy}
-          >
-            지금 동기화
-          </button>
-          <button
-            type="button"
-            className="lc-btn-ghost"
-            onClick={digest}
-            disabled={busy}
-          >
-            지금 디지스트 발송
-          </button>
-        </div>
+        <>
+          <SyncStatusBadge />
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-[var(--color-border-soft)] mt-3">
+            <button
+              type="button"
+              className="lc-btn-ghost"
+              onClick={sync}
+              disabled={busy}
+            >
+              지금 동기화
+            </button>
+            <button
+              type="button"
+              className="lc-btn-ghost"
+              onClick={digest}
+              disabled={busy}
+            >
+              지금 디지스트 발송
+            </button>
+          </div>
+        </>
       )}
       {status && (
         <div className="text-[11px] lc-text-mute mt-2">→ {status}</div>
+      )}
+    </SectionCard>
+  );
+}
+
+// ─────────────────────────────────────
+// 클라우드 sync 상태 뱃지 (마지막 동기화 결과)
+// ─────────────────────────────────────
+function SyncStatusBadge() {
+  const status = getSyncStatus();
+  if (!status) return null;
+  const dt = new Date(status.at);
+  const now = Date.now();
+  const minutesAgo = Math.max(0, Math.round((now - dt.getTime()) / 60000));
+  const timeLabel =
+    minutesAgo < 1 ? '방금'
+      : minutesAgo < 60 ? `${minutesAgo}분 전`
+      : minutesAgo < 60 * 24 ? `${Math.round(minutesAgo / 60)}시간 전`
+      : `${Math.round(minutesAgo / (60 * 24))}일 전`;
+  return (
+    <div
+      className="text-[11px] mt-2 px-2 py-1.5 rounded-lg"
+      style={{
+        background: status.ok ? 'var(--color-success-soft)' : 'var(--color-danger-soft)',
+        color: status.ok ? 'var(--color-success)' : 'var(--color-danger)',
+      }}
+    >
+      {status.ok ? '✓ ' : '✗ '}
+      마지막 동기화: {timeLabel} — {status.message}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────
+// 자동 아카이브 관리
+// ─────────────────────────────────────
+interface ArchiveSectionProps {
+  data: AppData;
+  onSetEntries: (entries: Entry[]) => void;
+  onFlash: (s: string) => void;
+}
+
+function ArchiveSection({ data, onSetEntries, onFlash }: ArchiveSectionProps) {
+  const total = data.entries.length;
+  const archived = countArchived(data.entries);
+
+  const restore = () => {
+    if (!confirm(`아카이브된 ${archived}개 항목을 모두 다시 보이게 할까요?`)) return;
+    onSetEntries(unarchiveAll(data.entries));
+    onFlash('아카이브 복원됨');
+  };
+
+  const purge = () => {
+    if (!confirm(`아카이브된 ${archived}개 항목을 영구 삭제할까요? 되돌릴 수 없어요.`)) return;
+    onSetEntries(purgeArchived(data.entries));
+    onFlash('아카이브 영구 삭제됨');
+  };
+
+  return (
+    <SectionCard
+      title="아카이브"
+      subtitle="완료한 지 90일 지난 항목은 자동으로 숨겨져요. 데이터는 보존됩니다."
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <Info label="전체 항목" value={`${total}개`} />
+        <Info label="아카이브된 항목" value={`${archived}개`} />
+      </div>
+      {archived > 0 && (
+        <div className="flex flex-wrap gap-2 pt-3 mt-3 border-t border-[var(--color-border-soft)]">
+          <button type="button" className="lc-btn-ghost" onClick={restore}>
+            전체 복원
+          </button>
+          <button type="button" className="lc-btn-danger" onClick={purge}>
+            영구 삭제
+          </button>
+        </div>
       )}
     </SectionCard>
   );

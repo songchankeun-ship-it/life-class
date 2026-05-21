@@ -104,9 +104,23 @@ export function Chat({
     el.style.height = Math.min(el.scrollHeight, 140) + 'px';
   }, [input]);
 
+  // 첫 마운트 + 탭이 '전체' 로 돌아왔을 때는 무조건 맨 아래로 (최근 대화 보이게)
   useEffect(() => {
-    if (activeTab === 'all' && scrollRef.current && !searchQuery) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (activeTab === 'all' && scrollRef.current) {
+      const el = scrollRef.current;
+      // 다음 tick에 (DOM 렌더 후) 스크롤
+      requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+    }
+  }, [activeTab]);
+
+  // 새 메시지/카드 추가 시: 사용자가 이미 맨 아래 근처(150px 이내)에 있을 때만 자동 스크롤.
+  // 위로 올려 옛 메시지 읽고 있으면 방해하지 않음.
+  useEffect(() => {
+    if (activeTab !== 'all' || !scrollRef.current || searchQuery) return;
+    const el = scrollRef.current;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+    if (nearBottom) {
+      el.scrollTop = el.scrollHeight;
     }
   }, [messages.length, inflight, activeTab, searchQuery]);
 
@@ -121,6 +135,14 @@ export function Chat({
     if (!text) return;
     const key = getApiKey();
     if (!key) { setShowKeyInput(true); return; }
+
+    // 녹음 중이면 즉시 정지하고 base 비우기 (안 그러면 다음 음성 입력 때 잔여 텍스트가 따라옴)
+    if (isRecording) {
+      const cur = recognitionRef.current as { stop?: () => void } | null;
+      cur?.stop?.();
+      setIsRecording(false);
+    }
+    recordingBaseRef.current = '';
 
     const stamp = new Date().toISOString();
     const userMsgId = 'msg-' + Math.random().toString(36).slice(2, 10);
@@ -217,6 +239,38 @@ export function Chat({
     onUpdateEntry({ ...entry, category: newCat, updatedAt: new Date().toISOString() });
     setCategoryMenuId(null);
   };
+
+  // 탭 전환 시 검색 자동 초기화
+  const switchTab = (key: TabKey) => {
+    setActiveTab(key);
+    setSearchQuery('');
+    setSearchOpen(false);
+  };
+
+  // 카테고리 메뉴 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!categoryMenuId) return;
+    const close = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      // 메뉴 자체 또는 카테고리 칩 클릭이면 무시 (메뉴 본인 토글이 처리)
+      if (target?.closest('[data-cat-menu]')) return;
+      setCategoryMenuId(null);
+    };
+    // mousedown 이 먼저 발생해서 click 이벤트보다 자연스러움
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [categoryMenuId]);
+
+  // 컴포넌트 unmount 또는 새로고침 시 음성 인식 정리
+  useEffect(() => {
+    return () => {
+      const cur = recognitionRef.current as { stop?: () => void; abort?: () => void } | null;
+      try {
+        cur?.abort?.();
+        cur?.stop?.();
+      } catch { /* ignore */ }
+    };
+  }, []);
 
   // 브라우저 음성 인식 지원 여부 1회 체크
   useEffect(() => {
@@ -398,7 +452,7 @@ export function Chat({
               <button
                 key={t.key}
                 type="button"
-                onClick={() => setActiveTab(t.key)}
+                onClick={() => switchTab(t.key)}
                 className={
                   'px-3 py-1.5 rounded-lg text-[13px] font-medium flex items-center gap-1.5 ' +
                   (isActive
@@ -520,9 +574,17 @@ export function Chat({
         )}
 
         {error && (
-          <div className="lc-card p-3 border-l-4 border-[var(--color-danger)] bg-[var(--color-danger-soft)]">
-            <div className="text-xs text-[var(--color-danger)] font-medium">AI 오류</div>
-            <div className="text-xs lc-text-deep mt-1 break-words">{error}</div>
+          <div className="lc-card p-3 border-l-4 border-[var(--color-danger)] bg-[var(--color-danger-soft)] relative">
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              aria-label="닫기"
+              className="absolute top-1 right-2 text-[var(--color-danger)] text-[14px] opacity-70 hover:opacity-100"
+            >
+              ✕
+            </button>
+            <div className="text-xs text-[var(--color-danger)] font-medium pr-5">AI 오류</div>
+            <div className="text-xs lc-text-deep mt-1 break-words pr-5">{error}</div>
             <button type="button" className="text-[11px] lc-text-blue mt-2 underline" onClick={() => setShowKeyInput(true)}>
               API 키 다시 입력
             </button>
@@ -540,6 +602,12 @@ export function Chat({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
+            // 사용자가 직접 키를 누르기 시작하면 녹음 자동 정지 (덮어쓰기 방지)
+            if (isRecording && e.key.length === 1) {
+              const cur = recognitionRef.current as { stop?: () => void } | null;
+              cur?.stop?.();
+              setIsRecording(false);
+            }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault();
               send();
@@ -691,7 +759,7 @@ function EntryCard({
 
       {expanded && (
         <div className="px-3 pb-3 pt-1 border-t border-[var(--color-border-soft)] space-y-2">
-          <div className="flex items-center gap-2 flex-wrap relative">
+          <div className="flex items-center gap-2 flex-wrap relative" data-cat-menu>
             <button
               type="button"
               onClick={onToggleCategoryMenu}
@@ -703,7 +771,11 @@ function EntryCard({
               <span className="text-[9px] opacity-60">▾</span>
             </button>
             {categoryMenuOpen && (
-              <div className="absolute z-10 top-full left-0 mt-1 bg-white border border-[var(--color-border)] rounded-xl shadow-lg p-1 flex flex-col min-w-[140px]">
+              <div
+                data-cat-menu
+                className="absolute z-20 top-full left-0 mt-1 bg-white border border-[var(--color-border)] rounded-xl shadow-lg p-1 flex flex-col min-w-[140px] max-w-[80vw]"
+                style={{ maxHeight: '60vh', overflowY: 'auto' }}
+              >
                 {(Object.keys(ENTRY_CATEGORY_LABEL) as EntryCategory[]).map((c) => (
                   <button
                     key={c}
@@ -788,6 +860,15 @@ function EditEntryModal({ entry, onClose, onSave }: EditModalProps) {
   const [amount, setAmount] = useState<string>(entry.amount != null ? String(entry.amount) : '');
   const [done, setDone] = useState<boolean>(entry.done ?? false);
   const [tagsText, setTagsText] = useState((entry.tags ?? []).join(', '));
+
+  // ESC 키로 닫기
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
   const handleSave = () => {
     const tags = tagsText.split(',').map((t) => t.trim()).filter((t) => t.length > 0);

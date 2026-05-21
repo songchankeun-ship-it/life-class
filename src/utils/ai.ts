@@ -186,6 +186,23 @@ function normalizeEntry(raw: RawEntry, userText: string, messageId: string): Ent
     : 'medium';
   const stamp = new Date().toISOString();
   const tags = Array.isArray(raw.tags) ? raw.tags.filter((t) => typeof t === 'string') : undefined;
+  // 날짜/시간 strict 검증 — regex 통과 후 실제 범위도 체크
+  const validDate = (s?: string): string | undefined => {
+    if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return undefined;
+    const [y, m, d] = s.split('-').map(Number);
+    if (m < 1 || m > 12 || d < 1 || d > 31) return undefined;
+    // Date 객체로 재검증 (윤년 등)
+    const dt = new Date(s + 'T00:00:00Z');
+    if (Number.isNaN(dt.getTime())) return undefined;
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() + 1 !== m || dt.getUTCDate() !== d) return undefined;
+    return s;
+  };
+  const validTime = (s?: string): string | undefined => {
+    if (!s || !/^\d{2}:\d{2}$/.test(s)) return undefined;
+    const [h, mm] = s.split(':').map(Number);
+    if (h < 0 || h > 23 || mm < 0 || mm > 59) return undefined;
+    return s;
+  };
   return {
     id: 'ent-' + Math.random().toString(36).slice(2, 10),
     originalText: (raw.originalText && raw.originalText.length > 0) ? raw.originalText : userText,
@@ -195,8 +212,8 @@ function normalizeEntry(raw: RawEntry, userText: string, messageId: string): Ent
     summary: raw.summary?.trim() || undefined,
     category,
     type: raw.type as Entry['type'] | undefined,
-    date: raw.date && /^\d{4}-\d{2}-\d{2}$/.test(raw.date) ? raw.date : undefined,
-    time: raw.time && /^\d{2}:\d{2}$/.test(raw.time) ? raw.time : undefined,
+    date: validDate(raw.date),
+    time: validTime(raw.time),
     priority,
     amount: typeof raw.amount === 'number' ? raw.amount : undefined,
     tags,

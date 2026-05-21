@@ -9,6 +9,31 @@ import type { Entry } from '../types';
 const URL_KEY = 'lifeclass_cloud_url';
 const KEY_KEY = 'lifeclass_cloud_key';
 const LAST_HASH_KEY = 'lifeclass_cloud_last_hash';
+const STATUS_KEY = 'lifeclass_cloud_status';
+
+export interface SyncStatus {
+  ok: boolean;
+  at: string;          // ISO timestamp of last attempt
+  message: string;     // 사용자에게 보여줄 한 줄 메시지
+}
+
+export function getSyncStatus(): SyncStatus | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(STATUS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as SyncStatus;
+  } catch {
+    return null;
+  }
+}
+
+function setSyncStatus(s: SyncStatus): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(STATUS_KEY, JSON.stringify(s));
+  } catch { /* quota */ }
+}
 
 export function getCloudConfig(): { url: string; key: string } {
   if (typeof window === 'undefined') return { url: '', key: '' };
@@ -20,8 +45,12 @@ export function getCloudConfig(): { url: string; key: string } {
 
 export function setCloudConfig(url: string, key: string): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.setItem(URL_KEY, url);
-  window.localStorage.setItem(KEY_KEY, key);
+  try {
+    window.localStorage.setItem(URL_KEY, url);
+    window.localStorage.setItem(KEY_KEY, key);
+  } catch (err) {
+    console.warn('[cloudSync] setConfig failed', err);
+  }
 }
 
 function stableHash(entries: Entry[]): string {
@@ -58,10 +87,14 @@ export function scheduleSync(entries: Entry[]): void {
 export async function syncNow(entries: Entry[]): Promise<{ ok: boolean; message: string }> {
   const { url, key } = getCloudConfig();
   if (!url || !key) return { ok: false, message: '설정 안 됨' };
+  const recordStatus = (result: { ok: boolean; message: string }) => {
+    setSyncStatus({ ok: result.ok, at: new Date().toISOString(), message: result.message });
+    return result;
+  };
   try {
     const hash = stableHash(entries);
     const lastHash = window.localStorage.getItem(LAST_HASH_KEY);
-    if (hash === lastHash) return { ok: true, message: '변경 없음' };
+    if (hash === lastHash) return recordStatus({ ok: true, message: '변경 없음' });
 
     const endpoint = url.replace(/\/+$/, '') + '/sync';
     const res = await fetch(endpoint, {
@@ -74,13 +107,13 @@ export async function syncNow(entries: Entry[]): Promise<{ ok: boolean; message:
     });
     if (!res.ok) {
       const t = await res.text();
-      return { ok: false, message: `${res.status}: ${t.slice(0, 100)}` };
+      return recordStatus({ ok: false, message: `${res.status}: ${t.slice(0, 100)}` });
     }
-    window.localStorage.setItem(LAST_HASH_KEY, hash);
+    try { window.localStorage.setItem(LAST_HASH_KEY, hash); } catch { /* quota — skip */ }
     const j = await res.json().catch(() => ({}));
-    return { ok: true, message: `Synced ${(j as { count?: number }).count ?? entries.length}건` };
+    return recordStatus({ ok: true, message: `Synced ${(j as { count?: number }).count ?? entries.length}건` });
   } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+    return recordStatus({ ok: false, message: err instanceof Error ? err.message : String(err) });
   }
 }
 

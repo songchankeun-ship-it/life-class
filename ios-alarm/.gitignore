@@ -1,0 +1,7 @@
+AideAlarms.xcodeproj/
+Assets.xcassets/
+build/
+*.p12
+*.mobileprovision
+*.p8
+*.ipa

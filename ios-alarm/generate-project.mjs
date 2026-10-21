@@ -31,10 +31,10 @@ put('AideAlarms.xcodeproj/xcshareddata/xcschemes/AideAlarms.xcscheme',`<?xml ver
 put('Assets.xcassets/Contents.json',JSON.stringify({info:{author:'xcode',version:1}}));
 put('Assets.xcassets/AppIcon.appiconset/Contents.json',JSON.stringify({images:[{filename:'AppIcon.png',idiom:'universal',platform:'ios',size:'1024x1024'}],info:{author:'xcode',version:1}}));
 // Original code-drawn icon; no external artwork, network or imaging packages.
-const size=1024,pixels=Buffer.alloc((size*4+1)*size),glyph=['01110','00001','01111','10001','01111'];
-for(let y=0;y<size;y++)for(let x=0;x<size;x++){const i=y*(size*4+1)+1+x*4,col=Math.floor((x-282)/92),row=Math.floor((y-282)/92),white=col>=0&&col<5&&row>=0&&row<5&&glyph[row][col]==='1';pixels[i]=white?255:91;pixels[i+1]=white?255:123;pixels[i+2]=white?255:232;pixels[i+3]=255;}
+const size=1024,pixels=Buffer.alloc((size*3+1)*size),glyph=['01110','00001','01111','10001','01111'];
+for(let y=0;y<size;y++)for(let x=0;x<size;x++){const i=y*(size*3+1)+1+x*3,col=Math.floor((x-282)/92),row=Math.floor((y-282)/92),white=col>=0&&col<5&&row>=0&&row<5&&glyph[row][col]==='1';pixels[i]=white?255:91;pixels[i+1]=white?255:123;pixels[i+2]=white?255:232;}
 function crc32(data){let n=0xffffffff;for(const b of data){n^=b;for(let k=0;k<8;k++)n=(n>>>1)^((n&1)?0xedb88320:0);}return (n^0xffffffff)>>>0;}
 function chunk(type,data){const t=Buffer.from(type),len=Buffer.alloc(4),crc=Buffer.alloc(4);len.writeUInt32BE(data.length);crc.writeUInt32BE(crc32(Buffer.concat([t,data])));return Buffer.concat([len,t,data,crc]);}
-const header=Buffer.alloc(13);header.writeUInt32BE(size);header.writeUInt32BE(size,4);header[8]=8;header[9]=6;
+const header=Buffer.alloc(13);header.writeUInt32BE(size);header.writeUInt32BE(size,4);header[8]=8;header[9]=2;
 put('Assets.xcassets/AppIcon.appiconset/AppIcon.png',Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',header),chunk('IDAT',deflateSync(pixels)),chunk('IEND',Buffer.alloc(0))]));
 process.stdout.write('Generated AideAlarms.xcodeproj and original app icon. No signing keys used.\n');

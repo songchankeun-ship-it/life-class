@@ -8,6 +8,8 @@ PC는 일정 입력·수정과 예약 상태 확인만 담당합니다. 이 앱�
 - 생성 프로젝트는 `node ios-alarm/generate-project.mjs`로 만듭니다. 외부 패키지를 설치하지 않습니다.
 - GitHub `Aide iPhone alarm build`는 macOS/iOS SDK 컴파일만 하며 서명, TestFlight 업로드, 알람 실행을 하지 않습니다.
 - TestFlight 설치에는 본인 Developer Program 팀의 배포 서명·프로파일과 App Store Connect 앱 등록이 추가로 필요합니다. Apple ID 비밀번호, API 키, 인증서 개인키를 소스·채팅·빌드 로그에 넣지 않습니다.
+- `Aide iPhone TestFlight (manual approval)`는 수동 실행 전용입니다. 워크플로를 검토해 기본 브랜치에 반영한 뒤 실행합니다. `aide-testflight` Environment에 배포 인증서 P12와 비밀번호, App Store 프로파일, App Store Connect API 키를 직접 등록해야 합니다. 해당 환경은 소유자 승인과 검토한 브랜치만 허용하도록 제한하는 것을 권장합니다. 아직 실행·업로드하지 않았습니다.
+- Environment Secrets: `AIDE_IOS_CERTIFICATE_BASE64`, `AIDE_IOS_CERTIFICATE_PASSWORD`, `AIDE_IOS_PROFILE_BASE64`, `AIDE_ASC_KEY_P8`, `AIDE_ASC_KEY_ID`, `AIDE_ASC_ISSUER_ID`. Environment Variables: `AIDE_IOS_TEAM_ID`, `AIDE_IOS_BUNDLE_ID`. 해당 정보와 키는 채팅에 보내지 않습니다.
 
 ## 실행 흐름
 

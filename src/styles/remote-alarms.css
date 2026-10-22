@@ -53,4 +53,5 @@
 .aide-alarm-explanation{font-size:13px;color:#758097;line-height:1.6;margin:6px 0!important}
 .aide-alarm-back{border:0;background:none;min-height:44px;color:#087fff;font-size:14px}
 @media(max-width:600px){.aide-alarm-sheet .aide-clock-body{padding:8px 16px 20px}.aide-alarm-sheet .aide-clock-footer{padding:12px 16px max(12px,env(safe-area-inset-bottom))}.aide-alarm-sheet .aide-clock-header{padding:16px 18px 12px}.aide-alarm-sheet .aide-clock-header h2{font-size:20px}}
+@media(max-width:600px) and (max-height:760px){.aide-alarm-sheet .aide-clock-header{padding-top:12px;padding-bottom:8px}.aide-alarm-editor.aide-remote-form{gap:9px}.aide-alarm-time{padding:12px 16px}.aide-alarm-time-display>b{font-size:46px}.aide-alarm-control{padding:10px 12px}.aide-alarm-control>small{display:none}.aide-alarm-sheet .aide-clock-primary{min-height:48px}.aide-alarm-preview{margin-bottom:8px!important}}
 @media(prefers-reduced-motion:reduce){.aide-alarm-sheet *{scroll-behavior:auto!important}}

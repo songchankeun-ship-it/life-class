@@ -27,18 +27,22 @@ enum CredentialStore {
 }
 enum AideError: Error { case server(Int), storage, invalidCommand, mismatchedAlarm }
 struct PairBody: Encodable { let code: String; let label: String }
-struct PollBody: Encodable { let authorization: String; let pushToken: String?; let bundleId: String? }
+struct PollBody: Encodable { let authorization: String; let pushToken: String?; let bundleId: String?; let protocolVersion = 2 }
+struct NativeSchedule: Codable, Equatable {
+    let kind: String; let fireAt: Double?; let weekdays: [Int]?; let time: String?; let timeZone: String; let snoozeSeconds: Int
+}
 struct Command: Decodable {
     let id: String; let version: Int; let nativeId: UUID; let operation: String
     let title: String; let fireAt: Double?; let ownedNativeIds: [UUID]; let challenge: String
+    let schedule: NativeSchedule?; let protocolVersion: Int?
 }
 struct Poll: Decodable { let commands: [Command] }
 struct Receipt: Encodable {
     let id: String; let version: Int; let nativeId: String; let status: String
     let observedAt: Int64; let fireAt: Int64?; let challenge: String; let errorCode: String?
+    let schedule: NativeSchedule?
 }
 struct Accepted: Decodable { let accepted: Bool }
-struct AideMetadata: AlarmMetadata { var requestId: String }
 
 @MainActor final class AlarmExecutor: ObservableObject {
     static let shared = AlarmExecutor()
@@ -110,7 +114,7 @@ struct AideMetadata: AlarmMetadata { var requestId: String }
     private func execute(_ cmd: Command) async throws -> Receipt {
         let observedAt = { Int64(Date().timeIntervalSince1970 * 1000) }
         func result(_ status: String, _ date: Date? = nil, _ error: String? = nil) -> Receipt {
-            Receipt(id: cmd.id, version: cmd.version, nativeId: cmd.nativeId.uuidString.lowercased(), status: status, observedAt: observedAt(), fireAt: date.map { Int64(($0.timeIntervalSince1970 * 1000).rounded()) }, challenge: cmd.challenge, errorCode: error)
+            Receipt(id: cmd.id, version: cmd.version, nativeId: cmd.nativeId.uuidString.lowercased(), status: status, observedAt: observedAt(), fireAt: date.map { Int64(($0.timeIntervalSince1970 * 1000).rounded()) }, challenge: cmd.challenge, errorCode: error, schedule: ["scheduled", "alerting", "snoozed", "paused"].contains(status) ? cmd.schedule : nil)
         }
         guard ["schedule", "cancel", "inspect"].contains(cmd.operation), cmd.ownedNativeIds.count <= 128, cmd.ownedNativeIds.contains(cmd.nativeId) else { throw AideError.invalidCommand }
         guard authorization == "authorized" else { return result("permission-denied") }
@@ -120,25 +124,55 @@ struct AideMetadata: AlarmMetadata { var requestId: String }
                 guard try !AlarmManager.shared.alarms.contains(where: { cmd.ownedNativeIds.contains($0.id) }) else { throw AideError.mismatchedAlarm }
                 return result("cancelled")
             }
-            guard let millis = cmd.fireAt, millis.isFinite else { throw AideError.invalidCommand }
-            let target = Date(timeIntervalSince1970: millis / 1000)
+            guard let expected = cmd.schedule, expected.timeZone == "Asia/Seoul", [300,600].contains(expected.snoozeSeconds) else { throw AideError.invalidCommand }
+            let weekly = expected.kind == "weekly"
+            let target = expected.fireAt.map { Date(timeIntervalSince1970: $0 / 1000) }
+            let schedule: Alarm.Schedule
+            if weekly {
+                guard TimeZone.current.identifier == expected.timeZone else { return result("failed", nil, "ALARM_TIMEZONE_MISMATCH") }
+                guard let days = expected.weekdays, !days.isEmpty, Set(days).count == days.count, days.allSatisfy({ (1...7).contains($0) }), let time = expected.time else { throw AideError.invalidCommand }
+                let parts = time.split(separator: ":").compactMap { Int($0) }
+                guard parts.count == 2, (0...23).contains(parts[0]), (0...59).contains(parts[1]) else { throw AideError.invalidCommand }
+                let names: [Locale.Weekday] = [.monday,.tuesday,.wednesday,.thursday,.friday,.saturday,.sunday]
+                schedule = .relative(.init(time: .init(hour: parts[0], minute: parts[1]), repeats: .weekly(days.map { names[$0-1] })))
+            } else {
+                guard expected.kind == "fixed", let target, expected.fireAt == cmd.fireAt else { throw AideError.invalidCommand }
+                schedule = .fixed(target)
+            }
             // Never cancel a ringing alarm just because its scheduled time passed.
-            if cmd.operation == "schedule" && target > Date() {
+            if cmd.operation == "schedule" && (weekly || (target ?? .distantPast) > Date()) {
                 for alarm in try AlarmManager.shared.alarms where cmd.ownedNativeIds.contains(alarm.id) && alarm.id != cmd.nativeId { try AlarmManager.shared.cancel(id: alarm.id) }
                 if try !AlarmManager.shared.alarms.contains(where: { $0.id == cmd.nativeId }) {
                     if confirmed.contains(cmd.nativeId.uuidString) { return result("missing") }
-                    guard target.timeIntervalSinceNow <= 366 * 86400 else { throw AideError.invalidCommand }
+                    guard weekly || (target ?? .distantFuture).timeIntervalSinceNow <= 366 * 86400 else { throw AideError.invalidCommand }
                     let stop = AlarmButton(text: "중지", textColor: .white, systemImageName: "stop.fill")
-                    let alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: cmd.title), stopButton: stop)
-                    let attrs = AlarmAttributes(presentation: AlarmPresentation(alert: alert), metadata: AideMetadata(requestId: cmd.id), tintColor: Color.blue)
-                    let config = AlarmManager.AlarmConfiguration.alarm(schedule: .fixed(target), attributes: attrs)
+                    let snooze = AlarmButton(text: "다시 알림", textColor: .white, systemImageName: "zzz")
+                    let title = LocalizedStringResource(stringLiteral: cmd.title)
+                    let alert = AlarmPresentation.Alert(title: title, stopButton: stop, secondaryButton: snooze, secondaryButtonBehavior: .countdown)
+                    let countdown = AlarmPresentation.Countdown(title: title, pauseButton: AlarmButton(text: "일시 정지", textColor: .white, systemImageName: "pause.fill"))
+                    let paused = AlarmPresentation.Paused(title: title, resumeButton: AlarmButton(text: "다시 시작", textColor: .white, systemImageName: "play.fill"))
+                    let attrs = AlarmAttributes(presentation: AlarmPresentation(alert: alert, countdown: countdown, paused: paused), metadata: AideMetadata(requestId: cmd.id, title: cmd.title), tintColor: Color.blue)
+                    let config = AlarmManager.AlarmConfiguration(countdownDuration: Alarm.CountdownDuration(preAlert: nil, postAlert: Double(expected.snoozeSeconds)), schedule: schedule, attributes: attrs, sound: .default)
                     _ = try await AlarmManager.shared.schedule(id: cmd.nativeId, configuration: config)
                 }
             }
-            guard let alarm = try AlarmManager.shared.alarms.first(where: { $0.id == cmd.nativeId }) else { return result(target <= Date() ? "elapsed-unverified" : "missing") }
-            guard let schedule = alarm.schedule, case .fixed(let actualDate) = schedule, abs(actualDate.timeIntervalSince(target)) < 0.001 else { throw AideError.mismatchedAlarm }
+            guard let alarm = try AlarmManager.shared.alarms.first(where: { $0.id == cmd.nativeId }) else { return result(!weekly && (target ?? .distantPast) <= Date() ? "elapsed-unverified" : "missing") }
+            guard let actual = alarm.schedule, alarm.countdownDuration?.postAlert == Double(expected.snoozeSeconds) else { throw AideError.mismatchedAlarm }
+            var actualDate: Date?
+            switch actual {
+            case .fixed(let date):
+                guard !weekly, let target, abs(date.timeIntervalSince(target)) < 0.001 else { throw AideError.mismatchedAlarm }; actualDate = date
+            case .relative(let value):
+                guard weekly, case .weekly(let days) = value.repeats else { throw AideError.mismatchedAlarm }
+                let names: [Locale.Weekday] = [.monday,.tuesday,.wednesday,.thursday,.friday,.saturday,.sunday]
+                let observed = days.compactMap { names.firstIndex(of: $0).map { $0+1 } }.sorted()
+                guard observed == expected.weekdays?.sorted(), String(format: "%02d:%02d", value.time.hour, value.time.minute) == expected.time else { throw AideError.mismatchedAlarm }
+            @unknown default: throw AideError.mismatchedAlarm
+            }
             if alarm.state == .alerting { remember(alarm.id); return result("alerting", actualDate) }
-            if alarm.state == .scheduled && target > Date() { remember(alarm.id); return result("scheduled", actualDate) }
+            if alarm.state == .countdown { remember(alarm.id); return result("snoozed", actualDate) }
+            if alarm.state == .paused { remember(alarm.id); return result("paused", actualDate) }
+            if alarm.state == .scheduled && (weekly || (target ?? .distantPast) > Date()) { remember(alarm.id); return result("scheduled", actualDate) }
             return result("elapsed-unverified")
         } catch { return result("failed", nil, "ALARMKIT_OPERATION_FAILED") }
     }
@@ -156,12 +190,15 @@ final class AideDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
     @StateObject private var executor = AlarmExecutor.shared
     @State private var code = ""
     var body: some Scene { WindowGroup {
+        TabView {
+        AideWebView().tabItem { Label("나의 Aide", systemImage: "sparkles") }
         NavigationStack { Form {
             Section { Label("알람은 이 아이폰에서만 울려요", systemImage: "alarm.fill"); Text("PC Aide에서 등록한 날짜·시간을 받아 예약하고, 실제 기기 예약 결과를 PC에 돌려줍니다.") }
             if !executor.connected { Section("PC에서 만든 12자리 연결 코드") { TextField("연결 코드", text: $code).keyboardType(.numberPad).textContentType(.oneTimeCode); Button("이 아이폰 연결") { Task { await executor.pair(code: code); if executor.connected { code = "" } } }.disabled(executor.busy || code.filter(\.isNumber).count != 12) } }
             else { Section("아이폰 알람") { Button("알람·알림 권한 허용") { Task { await executor.authorize() } }; Button("PC 요청 지금 확인") { Task { await executor.sync() } }.disabled(executor.busy); Text("현재 기기 예약 \(executor.reservationCount)개"); if let date = executor.lastSync { Text("마지막 서버 통신 \(date.formatted(date: .abbreviated, time: .standard))") } } }
             Section("상태") { Text(executor.message); Text("예약을 마친 알람은 PC가 꺼져 있어도 아이폰에서 실행됩니다. 새 요청은 아이폰이 받아야 예약돼요. 오프라인·앱 강제 종료 등으로 전달이 지연될 수 있으며 PC에서 확인 결과를 봐 주세요.").font(.footnote); Text("Aide가 만든 AlarmKit 알람입니다. 기본 시계 앱의 알람 목록과는 별도로 관리됩니다.").font(.footnote) }
             Section { Link("Aide 일정 열기", destination: aideServer.appendingPathComponent("life-class/")) }
-        }.navigationTitle("Aide 알람") }.onChange(of: phase) { _, value in executor.active(value == .active) }.task { executor.active(true) }
+        }.navigationTitle("아이폰 알람 연결") }.tabItem { Label("알람 연결", systemImage: "alarm") }
+        }.onChange(of: phase) { _, value in executor.active(value == .active) }.task { executor.active(true) }
     } }
 }

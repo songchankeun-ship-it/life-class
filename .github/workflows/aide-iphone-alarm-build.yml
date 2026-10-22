@@ -1,7 +1,7 @@
 name: Aide iPhone alarm build
 on:
   push:
-    branches: [aide/iphone-alarm-executor]
+    branches: [aide/iphone-alarm-executor, aide/native-alarm-app]
     paths: [ios-alarm/**, .github/workflows/aide-iphone-alarm-build.yml]
   pull_request:
     paths: [ios-alarm/**, .github/workflows/aide-iphone-alarm-build.yml]
@@ -26,10 +26,6 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project ios-alarm/AideAlarms.xcodeproj -scheme AideAlarms -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ios-alarm/build CODE_SIGNING_ALLOWED=NO build 2>&1 | tee ios-alarm/build.log
-      - name: Save compiler diagnostics
+      - name: Build summary without artifact storage
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: aide-alarm-unsigned-build-log
-          path: ios-alarm/build.log
-          retention-days: 7
+        run: echo 'Unsigned app + AlarmKit widget compilation only. No signing, payment, upload or notification.' >> "$GITHUB_STEP_SUMMARY"

@@ -2,7 +2,7 @@ name: Aide iPhone screens (no signing or alarms)
 on:
   push:
     branches: [aide/ios-screen-preview]
-    paths: [ios-alarm/preview/**, .github/workflows/aide-ios-preview.yml]
+    paths: [ios-alarm/**, .github/workflows/aide-ios-preview.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -47,6 +47,12 @@ jobs:
           xcrun simctl launch "$AIDE_PREVIEW_SIM" com.aide.personal.alarms --aide-preview-onboarding -AppleLanguages '(ko)' -AppleLocale ko_KR
           sleep 6
           xcrun simctl io "$AIDE_PREVIEW_SIM" screenshot "$RUNNER_TEMP/aide-connect.png"
+          for screen in device permission ready; do
+            xcrun simctl terminate "$AIDE_PREVIEW_SIM" com.aide.personal.alarms
+            xcrun simctl launch "$AIDE_PREVIEW_SIM" com.aide.personal.alarms "--aide-preview-$screen" -AppleLanguages '(ko)' -AppleLocale ko_KR
+            sleep 3
+            xcrun simctl io "$AIDE_PREVIEW_SIM" screenshot "$RUNNER_TEMP/aide-$screen.png"
+          done
           xcrun simctl terminate "$AIDE_PREVIEW_SIM" com.aide.personal.alarms
           xcrun simctl launch "$AIDE_PREVIEW_SIM" com.aide.personal.alarms --aide-preview-alarm -AppleLanguages '(ko)' -AppleLocale ko_KR
           sleep 9
@@ -56,7 +62,7 @@ jobs:
           python3 - <<'PY'
           import os, pathlib, base64
           folder=pathlib.Path(os.environ['RUNNER_TEMP'])
-          for name in ['aide-connect','aide-weekday']:
+          for name in ['aide-connect','aide-device','aide-permission','aide-ready','aide-weekday']:
               data=(folder/(name+'.png')).read_bytes()
               print('AIDE_PREVIEW_BEGIN '+name)
               print(base64.b64encode(data).decode())

@@ -227,44 +227,139 @@ final class AideDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
     @StateObject private var executor = AlarmExecutor.shared
     @StateObject private var web = AideWebSession()
     @State private var selectedTab = CredentialStore.load() == nil ? 1 : 0
-    @State private var code = ""
     var body: some Scene { WindowGroup {
         TabView(selection: $selectedTab) {
         AideWebView(session: web).overlay { if let error = web.loadError { VStack(spacing: 16) { Image(systemName: "wifi.exclamationmark").font(.largeTitle); Text(error).multilineTextAlignment(.center); Button("다시 연결") { web.open(.reload) } }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(uiColor: .systemBackground)) } else if !web.loaded { ProgressView("Aide를 열고 있어요") } }.tabItem { Label("나의 Aide", systemImage: "sparkles") }.tag(0)
-        NavigationStack { Form {
-            Section { Label("반가워요. 여기서 함께 연결해요.", systemImage: "sparkles"); Text("기존 일정은 그대로 가져오고, 알람은 이 아이폰에서만 울려요. 단축어를 따로 만들 필요 없어요.") }
-            Section("1 · 기존 일정 연결") {
-                Label(web.configured ? "이 앱에 Aide 연결 정보가 있어요" : "PC와 같은 일정에 연결해 주세요", systemImage: web.configured ? "checkmark.circle.fill" : "1.circle")
-                Text("Safari 홈 화면 앱과 새 앱의 저장 공간은 달라요. 처음 한 번만 PC 설정에서 만든 새 기기 코드를 입력하면 됩니다. 실제 동기화 결과는 나의 Aide 화면에서 확인해요.").font(.footnote)
-                Button(web.configured ? "Aide 연결 화면 확인" : "기존 일정 연결하기") { web.open(.connection); selectedTab = 0 }
-            }
-            Section("2 · 아이폰 알람 연결·허용") {
-                Label(executor.connected && executor.permissionGranted ? "기기 연결 · 알람 권한 허용됨" : executor.connected ? "기기는 연결됐어요. 알람을 허용해 주세요" : "Aide에서 이 아이폰을 연결해 주세요", systemImage: executor.connected && executor.permissionGranted ? "checkmark.circle.fill" : "2.circle")
-                Text("기존 일정 연결 후 아래 버튼을 눌러 ‘이 아이폰 연결’을 선택해 주세요. 알람 허용 안내가 이어집니다.").font(.footnote)
-                Button("아이폰 알람 연결 화면 열기") { web.open(.alarms); selectedTab = 0 }.disabled(!web.configured)
-                if executor.connected { Button(executor.permissionGranted ? "알람 권한 다시 확인" : "알람 허용하기") { Task { await executor.authorize() } }.disabled(executor.busy) }
-            }
-            Section("3 · 실제 예약 결과") {
-                Text(executor.message)
-                Button(executor.busy ? "예약 확인 중…" : "기기 예약 확인하고 PC로 보내기") { Task { await executor.sync() } }.disabled(executor.busy || !executor.connected)
-                if executor.connected && executor.permissionGranted { Text("현재 기기에서 예약 상태인 알람 \(executor.reservationCount)개").font(.footnote) }
-                if let date = executor.lastSync { Text("마지막 서버 통신 \(date.formatted(date: .abbreviated, time: .standard))").font(.footnote) }
+        NavigationStack { AideConnectionGuide(executor: executor, web: web, selectedTab: $selectedTab) }
+            .tabItem { Label("연결·알람", systemImage: "alarm") }.tag(1)
+        }.onChange(of: phase) { _, value in executor.active(value == .active) }.task { executor.active(true) }
+    } }
+}
+
+// Present only the next unfinished step. Connection flags do not prove an alarm reservation.
+private struct AideConnectionGuide: View {
+    @ObservedObject var executor: AlarmExecutor
+    @ObservedObject var web: AideWebSession
+    @Binding var selectedTab: Int
+    @State private var waitingForSchedule = false
+    @State private var waitingForAlarm = false
+    @State private var requestingPermission = false
+    @State private var code = ""
+    @State private var helpOpen = false
+    private var step: Int { !web.configured ? 0 : !executor.connected ? 1 : !executor.permissionGranted ? 2 : 3 }
+    private var working: Bool { requestingPermission || (step == 2 && executor.busy) }
+    private var titles: [String] { ["같은 일정을\n함께 볼게요", "이 아이폰을\n연결할게요", "알람이 울리도록\n허용해 주세요", "이제 알람을\n함께 챙겨요"] }
+    private var subtitles: [String] { ["PC에서 쓰던 Aide에 연결해요.\n기존 일정은 그대로예요.", "PC에서 부탁한 알람을\n이 아이폰이 받을 수 있게 연결해요.", "다음 안내에서 ‘허용’을 눌러 주세요.\n단축어는 필요 없어요.", "연결과 권한 설정을 마쳤어요.\n이제 원하는 알람을 확인하고 저장해요."] }
+    private var actions: [String] { ["기존 일정 연결하기", "아이폰 연결하기", "알람 허용하기", "알람 설정하기"] }
+    private var symbols: [String] { ["calendar", "iphone", "bell.badge", "checkmark"] }
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 28) {
+                if step < 3 {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("\(step + 1) / 3 · \(["일정 연결", "아이폰 연결", "알람 허용"][step])")
+                            .font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                        HStack(spacing: 6) { ForEach(0..<3) { index in
+                            Capsule().fill(index <= step ? Color.blue : Color(uiColor: .systemGray5)).frame(height: 4)
+                        } }.accessibilityLabel("연결 \(step + 1)단계, 총 3단계")
+                    }
+                }
+                VStack(alignment: .leading, spacing: 20) {
+                    Image(systemName: symbols[step]).font(.system(size: 30, weight: .medium))
+                        .foregroundStyle(.blue).frame(width: 68, height: 68)
+                        .background(Color.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 22))
+                        .accessibilityHidden(true)
+                    Text(titles[step]).font(.largeTitle.weight(.bold)).fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(subtitles[step]).font(.body).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }.padding(.vertical, 8)
+                if step == 0 {
+                    Label("PC Aide → 설정에서 새 기기 연결 코드를 만들어 주세요.", systemImage: "desktopcomputer")
+                        .font(.subheadline).padding(20).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.background, in: RoundedRectangle(cornerRadius: 22))
+                }
+                if step == 2 {
+                    Text(executor.message).font(.subheadline).foregroundStyle(.secondary)
+                    Button("아이폰 설정 열기") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
+                        .font(.subheadline)
+                }
+                if let error = web.loadError {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("연결을 다시 확인해 주세요", systemImage: "wifi.exclamationmark").font(.headline)
+                        Text(error).font(.subheadline).foregroundStyle(.secondary)
+                        Button("다시 연결") { web.open(.reload) }
+                    }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.background, in: RoundedRectangle(cornerRadius: 22))
+                }
+                if step == 3 { reservationDetails }
+                DisclosureGroup("도움이 필요해요", isExpanded: $helpOpen) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if step == 0 {
+                            Text("Safari의 Aide와 새 앱은 처음 한 번 따로 연결해요. 연결 정보 확인 후, 실제 일정 동기화는 ‘나의 Aide’에서 확인할 수 있어요.")
+                        } else if step == 1 {
+                            Text("열리는 화면에서 ‘이 아이폰 연결’을 누르세요. 직접 코드를 입력해야 할 때만 아래를 사용해 주세요.")
+                            Text("알람 전용 코드는 PC의 ‘아이폰 앱 알람 → 앱 연결 코드 만들기’에 있어요. 일정 연결 코드와는 달라요.")
+                            TextField("알람 전용 숫자 12자리", text: $code).keyboardType(.numberPad).textContentType(.oneTimeCode).textFieldStyle(.roundedBorder)
+                            Button("코드로 연결") { Task { await executor.pair(code: code); if executor.connected { code = ""; await executor.authorize() } } }
+                                .disabled(executor.busy || code.filter(\.isNumber).count != 12)
+                            Text(executor.message)
+                        } else if step == 2 {
+                            Text("허용을 거절했다면 아이폰 설정에서 Aide의 알람 권한을 켜 주세요. 기존 일정과 알림은 그대로 유지돼요.")
+                        } else {
+                            Text("이미 기기에 예약된 알람은 PC를 꺼도 유지돼요. 새 요청·변경·취소는 아이폰이 받아야 반영됩니다.")
+                            Text("Aide 알람은 기본 시계 앱 목록과 별도예요. 기존 Safari Aide의 일정과 푸시 알림은 유지돼요.")
+                            Button("일정 연결 화면 열기") { open(.connection) }
+                            Button("아이폰 연결 화면 열기") { open(.alarms) }
+                        }
+                    }.font(.footnote).foregroundStyle(.secondary).padding(.top, 12)
+                }.font(.subheadline).padding(20).background(.background, in: RoundedRectangle(cornerRadius: 22))
+            }.padding(24).frame(maxWidth: 560, alignment: .leading).frame(maxWidth: .infinity)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+        .safeAreaInset(edge: .bottom) {
+            Button { advance() } label: {
+                HStack(spacing: 10) { if working { ProgressView() }; Text(working ? "잠시만 기다려 주세요…" : actions[step]).fontWeight(.semibold) }
+                    .frame(maxWidth: .infinity).padding(.vertical, 10)
+            }.buttonStyle(.borderedProminent).controlSize(.large).disabled(working)
+                .frame(maxWidth: 512).padding(.horizontal, 24).padding(.vertical, 16)
+                .frame(maxWidth: .infinity).background(.bar)
+        }
+        .navigationTitle(step == 3 ? "연결·알람" : "처음 연결")
+        .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: web.configured) { _, configured in
+            if configured && waitingForSchedule { waitingForSchedule = false; selectedTab = 1 }
+        }
+        .onChange(of: executor.connected) { _, connected in
+            if connected && waitingForAlarm { waitingForAlarm = false; selectedTab = 1 }
+        }
+        .onChange(of: step) { _, _ in helpOpen = false }
+    }
+    private func open(_ destination: AideWebDestination) { web.open(destination); selectedTab = 0 }
+    private func advance() {
+        switch step {
+        case 0: waitingForSchedule = true; open(.connection)
+        case 1: waitingForAlarm = true; open(.alarms)
+        case 2: requestingPermission = true; Task { await executor.authorize(); requestingPermission = false }
+        default: open(.alarms)
+        }
+    }
+    private var reservationDetails: some View {
+        DisclosureGroup("아이폰 예약 확인") {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(executor.message).font(.subheadline)
+                Button(executor.busy ? "확인 중…" : "예약 확인하고 PC에 보내기") { Task { await executor.sync() } }.disabled(executor.busy)
+                if let date = executor.lastSync {
+                    Text("기기 예약 \(executor.reservationCount)개 · 마지막 서버 통신 \(date.formatted(date: .abbreviated, time: .standard))").font(.caption).foregroundStyle(.secondary)
+                }
                 ForEach(executor.checks) { check in VStack(alignment: .leading, spacing: 6) {
                     Text(check.title).font(.headline); Text(check.timing).font(.subheadline)
                     Text(check.titleForStatus).foregroundStyle(check.status == "scheduled" && check.acknowledged && check.fresh ? Color.green : Color.secondary)
                     Text("기기 확인 \(check.observedAt.formatted(date: .abbreviated, time: .standard)) · \(check.acknowledged ? "PC 전달 접수됨" : "PC 전달 확인 대기")").font(.caption)
                     if let code = check.errorCode { Text(code).font(.caption.monospaced()) }
-                }.padding(.vertical, 4) }
-                if executor.checks.isEmpty { Text("아직 이 앱에서 읽은 알람 확인 결과가 없어요. 서버에 일정을 저장하는 것과 실제 아이폰 예약은 별개예요.").font(.footnote) }
-            }
-            if let error = web.loadError { Section("Aide 화면 연결") { Text(error); Button("Aide 다시 열기") { web.open(.reload); selectedTab = 0 } } }
-            if !executor.connected { Section { DisclosureGroup("알람 전용 코드 직접 입력 · 필요할 때만") {
-                Text("PC의 ‘아이폰 앱 알람 → 앱 연결 코드 만들기’에서 만든 숫자 12자리 코드예요. 위 1단계의 새 기기 연결 코드와 다릅니다.").font(.footnote)
-                TextField("알람 전용 숫자 코드", text: $code).keyboardType(.numberPad).textContentType(.oneTimeCode)
-                Button("알람 기기 연결") { Task { await executor.pair(code: code); if executor.connected { code = ""; await executor.authorize() } } }.disabled(executor.busy || code.filter(\.isNumber).count != 12)
-            } } }
-            Section("기억해 주세요") { Text("이미 기기에 예약된 알람은 PC를 꺼도 유지돼요. 새 요청·변경·취소는 아이폰이 받아야 반영됩니다. 마지막 확인 뒤 상태가 달라질 수 있어요.").font(.footnote); Text("Aide의 AlarmKit 알람은 기본 시계 앱의 목록과 별도예요. 기존 일정과 아이폰 푸시 알림을 지우지 않아요.").font(.footnote) }
-        }.navigationTitle("연결과 알람") }.tabItem { Label("연결·알람", systemImage: "alarm") }.tag(1)
-        }.onChange(of: phase) { _, value in executor.active(value == .active) }.task { executor.active(true) }
-    } }
+                } }
+                if executor.checks.isEmpty { Text("아직 기기에서 확인한 예약이 없어요. 연결 완료는 알람 예약 완료와 달라요.").font(.footnote).foregroundStyle(.secondary) }
+            }.padding(.top, 12)
+        }.font(.subheadline).padding(20).background(.background, in: RoundedRectangle(cornerRadius: 22))
+    }
 }

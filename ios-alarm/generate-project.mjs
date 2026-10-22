@@ -32,6 +32,8 @@ for(const kind of ['project','app','widget']){
  for(const name of ['Debug','Release']){
   let settings='SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 26.0; SWIFT_VERSION = 5.0;';
   if(kind!=='project')settings+=' AIDE_BUNDLE_ID = com.aide.personal.alarms; PRODUCT_BUNDLE_IDENTIFIER = "$(AIDE_BUNDLE_ID)'+(kind==='widget'?'.widgets':'')+'"; PRODUCT_NAME = "$(TARGET_NAME)"; MARKETING_VERSION = 0.2.0; CURRENT_PROJECT_VERSION = 2; INFOPLIST_FILE = '+(kind==='app'?'Info.plist':'WidgetInfo.plist')+'; GENERATE_INFOPLIST_FILE = NO; CODE_SIGN_STYLE = Automatic; TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_EMIT_LOC_STRINGS = YES; '+(kind==='app'?'CODE_SIGN_ENTITLEMENTS = AideAlarms.entitlements; ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;':'APPLICATION_EXTENSION_API_ONLY = YES; SKIP_INSTALL = YES;');
+  settings+=' ALWAYS_SEARCH_USER_PATHS = NO;';
+  if(kind!=='project')settings+=' PROVISIONING_PROFILE_SPECIFIER = "$('+(kind==='app'?'AIDE_APP_PROFILE':'AIDE_WIDGET_PROFILE')+')";';
   add(kind+name,'isa = XCBuildConfiguration; buildSettings = {'+settings+'}; name = '+name+';');
  }
  add(kind+'Configs','isa = XCConfigurationList; buildConfigurations = ('+id(kind+'Debug')+','+id(kind+'Release')+'); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;');

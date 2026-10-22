@@ -310,7 +310,7 @@ private struct AideConnectionGuide: View {
                             Text("이미 기기에 예약된 알람은 PC를 꺼도 유지돼요. 새 요청·변경·취소는 아이폰이 받아야 반영됩니다.")
                             Text("Aide 알람은 기본 시계 앱 목록과 별도예요. 기존 Safari Aide의 일정과 푸시 알림은 유지돼요.")
                             Button("일정 연결 화면 열기") { open(.connection) }
-                            Button("아이폰 연결 화면 열기") { open(.alarms) }
+                            Button("아이폰 연결 화면 열기") { open(.alarmConnection) }
                         }
                     }.font(.footnote).foregroundStyle(.secondary).padding(.top, 12)
                 }.font(.subheadline).padding(20).background(.background, in: RoundedRectangle(cornerRadius: 22))
@@ -339,7 +339,7 @@ private struct AideConnectionGuide: View {
     private func advance() {
         switch step {
         case 0: waitingForSchedule = true; open(.connection)
-        case 1: waitingForAlarm = true; open(.alarms)
+        case 1: waitingForAlarm = true; open(.alarmConnection)
         case 2: requestingPermission = true; Task { await executor.authorize(); requestingPermission = false }
         default: open(.alarms)
         }

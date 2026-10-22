@@ -1,7 +1,7 @@
 import SwiftUI
 import WebKit
 
-enum AideWebDestination: Equatable { case connection, alarms, reload }
+enum AideWebDestination: Equatable { case connection, alarmConnection, alarms, reload }
 @MainActor final class AideWebSession: ObservableObject {
     @Published var configured = false
     @Published var loaded = false
@@ -43,7 +43,7 @@ enum AideWebDestination: Equatable { case connection, alarms, reload }
             if destination == .reload { openedRevision = session.revision; webView?.reload(); return }
             guard appReady else { return }
             openedRevision = session.revision
-            let event = destination == .connection ? "aide-open-device-connection" : "aide-open-remote-alarms"
+            let event = destination == .connection ? "aide-open-device-connection" : destination == .alarmConnection ? "aide-open-alarm-connection" : "aide-open-remote-alarms"
             // Both events only open UI. Pairing, permissions and reservation still require a user action.
             webView?.evaluateJavaScript("window.dispatchEvent(new Event('"+event+"'));")
         }

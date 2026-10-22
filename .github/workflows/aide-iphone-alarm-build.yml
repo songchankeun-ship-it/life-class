@@ -26,6 +26,10 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project ios-alarm/AideAlarms.xcodeproj -scheme AideAlarms -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ios-alarm/build CODE_SIGNING_ALLOWED=NO build 2>&1 | tee ios-alarm/build.log
+      - name: Compile iPhone device app and embedded widget without signing
+        run: |
+          set -o pipefail
+          xcodebuild -project ios-alarm/AideAlarms.xcodeproj -scheme AideAlarms -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath ios-alarm/device-build CODE_SIGNING_ALLOWED=NO build 2>&1 | tee ios-alarm/device-build.log
       - name: Build summary without artifact storage
         if: always()
         run: echo 'Unsigned app + AlarmKit widget compilation only. No signing, payment, upload or notification.' >> "$GITHUB_STEP_SUMMARY"

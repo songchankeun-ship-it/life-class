@@ -1,0 +1,56 @@
+.aide-remote-jobs{display:grid;gap:12px;margin:20px 0}.aide-remote-job,.aide-remote-device{padding:16px;border:1px solid #dfe6ef;border-radius:15px;background:white}.aide-remote-job>span{display:inline-block;background:#fff1cc;color:#826326;font-size:12px;border-radius:6px;padding:3px 8px}.aide-remote-job>span.is-confirmed{background:#e5f3e9;color:#3c7653}.aide-remote-job h3{font-size:17px;font-weight:650;margin:9px 0}.aide-remote-job p,.aide-remote-device p{font-size:13px;color:#667891}.aide-remote-job small{color:#758399}.aide-remote-pair{font-size:25px;letter-spacing:2px;color:#355fa8}.aide-remote-inline{display:block;min-height:42px;border:1px solid #d5e1f4;border-radius:10px;padding:8px 13px;margin-top:12px;background:#eff5ff;color:#4266a5;font-size:13px}
+.aide-remote-form{display:grid;gap:14px;margin:20px 0;padding:18px;background:#f2f6fc;border-radius:18px}.aide-remote-form label{display:grid;gap:7px;font-size:14px;font-weight:600}.aide-remote-form input,.aide-remote-form select{width:100%;min-width:0;min-height:46px;padding:10px;border:1px solid #ccd9e9;border-radius:10px;background:#fff;color:#1b2b43;font-size:16px;box-sizing:border-box}.aide-remote-segment,.aide-remote-weekdays{display:flex;gap:5px}.aide-remote-segment button,.aide-remote-weekdays button{flex:1;min-width:0;min-height:44px;border:1px solid #d5dfed;border-radius:10px;background:#fff;color:#4d6078}.aide-remote-segment button[aria-pressed=true],.aide-remote-weekdays button[aria-pressed=true]{background:#335e9c;color:#fff;border-color:#335e9c}.aide-remote-form h3{margin:0}.aide-remote-form .aide-clock-note{margin:0}
+
+/* One compact editor for PC and iPhone; request/receipt verification is unchanged. */
+.aide-alarm-sheet{background:#f3f4f8;color:#1c2738}
+.aide-alarm-sheet .aide-clock-header{border:0;padding-bottom:12px}
+.aide-alarm-sheet .aide-clock-body{padding-top:8px}
+.aide-alarm-sheet .aide-clock-footer{background:#fafbfe;border-color:#e5e8ef}
+.aide-alarm-sheet .aide-clock-primary{background:#087fff;border-color:#087fff;border-radius:18px;min-height:52px;font-size:16px}
+.aide-alarm-sheet .aide-clock-primary:disabled{background:#dce3ee;border-color:#dce3ee;color:#64758f}
+.aide-alarm-preview{font-size:12px;color:#6b7485;line-height:1.5;margin:0 0 12px!important}
+.aide-alarm-editor.aide-remote-form{background:none;padding:0;margin:0 0 18px;gap:12px}
+.aide-alarm-editor .aide-remote-segment{padding:4px;background:#e5e8ef;border-radius:14px;gap:4px}
+.aide-alarm-editor .aide-remote-segment button{border:0;background:none;min-height:38px;font-size:13px;color:#6b7485}
+.aide-alarm-editor .aide-remote-segment button[aria-pressed=true]{background:white;color:#1c2738;box-shadow:0 2px 5px #17243c0c}
+.aide-alarm-time{position:relative;padding:18px 20px;background:white;border-radius:22px;overflow:hidden}
+.aide-alarm-time>span:first-child{font-size:12px;color:#758097;font-weight:500}
+.aide-alarm-time-display{display:flex;align-items:baseline;gap:9px;line-height:1.2;font-variant-numeric:tabular-nums}
+.aide-alarm-time-display>span{font-size:18px;font-weight:550;color:#45617f}
+.aide-alarm-time-display>b{font-size:52px;letter-spacing:-2px;font-weight:650;color:#17263c}
+.aide-alarm-time-display>small{margin-left:auto;font-size:12px;font-weight:500;color:#087fff;white-space:nowrap}
+.aide-alarm-time input[type=time]{position:absolute;inset:0;width:100%;height:100%;max-width:100%;min-width:0;margin:0;opacity:0;cursor:pointer;font-size:16px}
+.aide-alarm-time:focus-within{outline:3px solid #91b2ff;outline-offset:2px}
+.aide-alarm-control{padding:14px 12px;background:white;border-radius:20px;min-width:0}
+.aide-alarm-control h3{font-size:14px;font-weight:600;margin:0}
+.aide-alarm-control-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.aide-alarm-control-heading>button{border:0;background:none;color:#087fff;min-height:36px;padding:0 4px;font-size:12px}
+.aide-alarm-control>small{display:block;margin-top:8px;color:#7a8597;font-size:11px;font-weight:400;line-height:1.5}
+.aide-alarm-control .aide-remote-weekdays{gap:4px}
+.aide-alarm-control .aide-remote-weekdays button{height:44px;border-radius:50%;font-size:14px;border-color:transparent;background:#f1f3f7;color:#69768a}
+.aide-alarm-control .aide-remote-weekdays button[aria-pressed=true]{background:#087fff;color:white}
+.aide-alarm-snooze{display:flex;gap:8px;margin-top:10px}
+.aide-alarm-snooze>button{flex:1;min-height:44px;border:1px solid #e5e9f0;border-radius:12px;background:#f6f7fa;font-size:15px;color:#748098}
+.aide-alarm-snooze>button[aria-pressed=true]{background:#edf5ff;color:#0871e1;border-color:#9cc7ff;font-weight:650}
+.aide-alarm-editor label.aide-alarm-name{display:flex;align-items:center;gap:14px;background:white;border-radius:18px;padding:8px 14px;white-space:nowrap;font-size:13px}
+.aide-alarm-name input{border:0;background:none;text-align:right;padding-right:0;color:#52627c;min-height:40px;white-space:normal}
+.aide-alarm-reservations{border:1px solid #e2e7ef;border-radius:18px;background:white;margin:16px 0}
+.aide-alarm-reservations>summary{cursor:pointer;padding:16px;font-size:14px;font-weight:600;min-height:52px}
+.aide-alarm-reservations>summary>span{font-size:11px;color:#758399;font-weight:400;margin-left:8px}
+.aide-alarm-reservations>div{padding:0 16px 18px}
+.aide-alarm-reservations p{font-size:12px;color:#697c93}
+.aide-alarm-sheet .aide-clock-guide{border-color:#e2e7ef;font-size:12px;padding:12px 16px}
+.aide-alarm-sheet .aide-clock-guide>summary{font-size:13px;min-height:28px}
+.aide-alarm-review-intro{padding:16px 0 8px;color:#087fff}
+.aide-alarm-review-intro h3{font-size:24px;color:#1c2738;margin:12px 0 4px}
+.aide-alarm-review-intro p{font-size:13px;color:#788497;margin:0}
+.aide-alarm-review-card{padding:22px;background:white;border-radius:22px}
+.aide-alarm-review-card>strong{display:block;font-size:17px;font-weight:600;overflow-wrap:anywhere;margin-bottom:12px}
+.aide-alarm-review-card dl{margin:20px 0 0;display:grid;gap:12px}
+.aide-alarm-review-card dl>div{display:flex;justify-content:space-between;gap:16px;align-items:baseline;font-size:14px}
+.aide-alarm-review-card dt{color:#788497;flex-shrink:0}
+.aide-alarm-review-card dd{margin:0;text-align:right;overflow-wrap:anywhere}
+.aide-alarm-explanation{font-size:13px;color:#758097;line-height:1.6;margin:6px 0!important}
+.aide-alarm-back{border:0;background:none;min-height:44px;color:#087fff;font-size:14px}
+@media(max-width:600px){.aide-alarm-sheet .aide-clock-body{padding:8px 16px 20px}.aide-alarm-sheet .aide-clock-footer{padding:12px 16px max(12px,env(safe-area-inset-bottom))}.aide-alarm-sheet .aide-clock-header{padding:16px 18px 12px}.aide-alarm-sheet .aide-clock-header h2{font-size:20px}}
+@media(prefers-reduced-motion:reduce){.aide-alarm-sheet *{scroll-behavior:auto!important}}

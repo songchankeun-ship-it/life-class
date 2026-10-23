@@ -1,0 +1,118 @@
+name: Aide iPhone TestFlight (manual approval)
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_upload:
+        description: '본인 Apple 팀의 서명으로 App Store Connect에 시험 빌드를 올립니다 (공개 App Store 출시는 아님)'
+        type: boolean
+        required: true
+        default: false
+permissions:
+  contents: read
+jobs:
+  upload:
+    if: inputs.confirm_upload
+    environment: aide-testflight
+    runs-on: macos-26
+    timeout-minutes: 20
+    env:
+      TEAM_ID: ${{ vars.AIDE_IOS_TEAM_ID }}
+      BUNDLE_ID: ${{ vars.AIDE_IOS_BUNDLE_ID }}
+      ASC_KEY_ID: ${{ secrets.AIDE_ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.AIDE_ASC_ISSUER_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prepare signing material without logging credentials
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.AIDE_IOS_CERTIFICATE_BASE64 }}
+          PROFILE_BASE64: ${{ secrets.AIDE_IOS_PROFILE_BASE64 }}
+          WIDGET_PROFILE_BASE64: ${{ secrets.AIDE_IOS_WIDGET_PROFILE_BASE64 }}
+          ASC_KEY_P8: ${{ secrets.AIDE_ASC_KEY_P8 }}
+        run: |
+          python3 - <<'PY'
+          import os, re, base64, pathlib, secrets
+          for key in ['CERTIFICATE_BASE64','PROFILE_BASE64','WIDGET_PROFILE_BASE64','ASC_KEY_P8','TEAM_ID','BUNDLE_ID','ASC_KEY_ID','ASC_ISSUER_ID']:
+              if not os.environ.get(key): raise SystemExit('Required signing configuration is missing: '+key)
+          if not re.fullmatch(r'[A-Z0-9]{10}',os.environ['TEAM_ID']): raise SystemExit('Invalid team ID')
+          if not re.fullmatch(r'[A-Z0-9]{10}',os.environ['ASC_KEY_ID']): raise SystemExit('Invalid API key ID')
+          if not re.fullmatch(r'[\w.-]{5,150}',os.environ['BUNDLE_ID']): raise SystemExit('Invalid bundle ID')
+          folder=pathlib.Path(os.environ['RUNNER_TEMP'])
+          for name,env in [('aide-signing.p12','CERTIFICATE_BASE64'),('aide-profile.mobileprovision','PROFILE_BASE64'),('aide-widget.mobileprovision','WIDGET_PROFILE_BASE64')]:
+              file=folder/name; file.write_bytes(base64.b64decode(os.environ[env])); file.chmod(0o600)
+          keys=pathlib.Path.home()/'.appstoreconnect/private_keys';keys.mkdir(parents=True,exist_ok=True)
+          file=keys/('AuthKey_'+os.environ['ASC_KEY_ID']+'.p8');file.write_text(os.environ['ASC_KEY_P8']);file.chmod(0o600)
+          password=secrets.token_hex(32);print('::add-mask::'+password)
+          with open(os.environ['GITHUB_ENV'],'a') as out: out.write('KEYCHAIN_PASSWORD='+password+'\n')
+          PY
+      - name: Import Apple Distribution certificate and validate provisioning
+        env:
+          CERTIFICATE_PASSWORD: ${{ secrets.AIDE_IOS_CERTIFICATE_PASSWORD }}
+        run: |
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/aide.keychain-db"
+          security set-keychain-settings -lut 21600 "$RUNNER_TEMP/aide.keychain-db"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/aide.keychain-db"
+          security import "$RUNNER_TEMP/aide-signing.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$RUNNER_TEMP/aide.keychain-db"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/aide.keychain-db"
+          security list-keychains -d user -s "$RUNNER_TEMP/aide.keychain-db"
+          security cms -D -i "$RUNNER_TEMP/aide-profile.mobileprovision" > "$RUNNER_TEMP/aide-profile.plist"
+          security cms -D -i "$RUNNER_TEMP/aide-widget.mobileprovision" > "$RUNNER_TEMP/aide-widget.plist"
+          python3 - <<'PY'
+          import os, plistlib, pathlib, shutil, re, datetime
+          p=plistlib.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'aide-profile.plist').read_bytes());e=p['Entitlements']
+          if e.get('application-identifier') != os.environ['TEAM_ID']+'.'+os.environ['BUNDLE_ID']: raise SystemExit('Profile does not match this exact app and team')
+          if e.get('aps-environment') != 'production' or e.get('get-task-allow'): raise SystemExit('A production distribution profile with Push Notifications is required')
+          if p.get('ProvisionedDevices') or p.get('ProvisionsAllDevices'): raise SystemExit('Use an App Store distribution profile for TestFlight')
+          uuid=p['UUID']
+          if not re.fullmatch(r'[A-Fa-f0-9-]{36}',uuid): raise SystemExit('Invalid profile UUID')
+          folder=pathlib.Path.home()/'Library/MobileDevice/Provisioning Profiles';folder.mkdir(parents=True,exist_ok=True)
+          shutil.copyfile(pathlib.Path(os.environ['RUNNER_TEMP'])/'aide-profile.mobileprovision',folder/(uuid+'.mobileprovision'))
+          with open(os.environ['GITHUB_ENV'],'a') as out: out.write('PROFILE_UUID='+uuid+'\n')
+          w=plistlib.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'aide-widget.plist').read_bytes());we=w['Entitlements'];wid=w['UUID']
+          if we.get('application-identifier') != os.environ['TEAM_ID']+'.'+os.environ['BUNDLE_ID']+'.widgets' or we.get('get-task-allow') or w.get('ProvisionedDevices') or w.get('ProvisionsAllDevices'): raise SystemExit('Widget requires its own exact App Store distribution profile')
+          if not re.fullmatch(r'[A-Fa-f0-9-]{36}',wid): raise SystemExit('Invalid widget profile UUID')
+          for profile in [p,w]:
+              if profile['ExpirationDate'] <= datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None): raise SystemExit('Distribution profile has expired')
+              if profile.get('TeamIdentifier') != [os.environ['TEAM_ID']]: raise SystemExit('Distribution profile team mismatch')
+          shutil.copyfile(pathlib.Path(os.environ['RUNNER_TEMP'])/'aide-widget.mobileprovision',folder/(wid+'.mobileprovision'))
+          with open(os.environ['GITHUB_ENV'],'a') as out: out.write('WIDGET_PROFILE_UUID='+wid+'\n')
+          options={'method':'app-store-connect','teamID':os.environ['TEAM_ID'],'signingStyle':'manual','provisioningProfiles':{os.environ['BUNDLE_ID']:uuid,os.environ['BUNDLE_ID']+'.widgets':wid},'uploadSymbols':True}
+          (pathlib.Path(os.environ['RUNNER_TEMP'])/'aide-export.plist').write_bytes(plistlib.dumps(options))
+          PY
+      - name: Archive and export signed app
+        run: |
+          node ios-alarm/generate-project.mjs
+          /usr/libexec/PlistBuddy -c 'Set :aps-environment production' ios-alarm/AideAlarms.entitlements
+          xcodebuild -project ios-alarm/AideAlarms.xcodeproj -scheme AideAlarms -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -archivePath ios-alarm/build/AideAlarms.xcarchive DEVELOPMENT_TEAM="$TEAM_ID" AIDE_BUNDLE_ID="$BUNDLE_ID" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='Apple Distribution' AIDE_APP_PROFILE="$PROFILE_UUID" AIDE_WIDGET_PROFILE="$WIDGET_PROFILE_UUID" archive
+          xcodebuild -exportArchive -archivePath ios-alarm/build/AideAlarms.xcarchive -exportPath ios-alarm/build/export -exportOptionsPlist "$RUNNER_TEMP/aide-export.plist"
+      - name: Verify app and embedded widget signatures before upload
+        run: |
+          APP='ios-alarm/build/AideAlarms.xcarchive/Products/Applications/AideAlarms.app'
+          codesign --verify --deep --strict "$APP"
+          codesign -d --entitlements :- "$APP" > "$RUNNER_TEMP/aide-signed-entitlements.plist" 2>/dev/null
+          python3 - <<'PY'
+          import os, plistlib, pathlib
+          app=pathlib.Path('ios-alarm/build/AideAlarms.xcarchive/Products/Applications/AideAlarms.app')
+          info=plistlib.loads((app/'Info.plist').read_bytes())
+          entitlement=plistlib.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'aide-signed-entitlements.plist').read_bytes())
+          if info['CFBundleIdentifier'] != os.environ['BUNDLE_ID']: raise SystemExit('Signed app bundle ID mismatch')
+          if entitlement.get('aps-environment') != 'production' or entitlement.get('get-task-allow',False): raise SystemExit('Invalid signed distribution entitlements')
+          widgets=list((app/'PlugIns').glob('*.appex'))
+          if len(widgets) != 1: raise SystemExit('Expected one embedded alarm widget')
+          widget=plistlib.loads((widgets[0]/'Info.plist').read_bytes())
+          if widget['CFBundleIdentifier'] != os.environ['BUNDLE_ID']+'.widgets': raise SystemExit('Signed widget bundle ID mismatch')
+          if widget['CFBundleVersion'] != info['CFBundleVersion']: raise SystemExit('App and widget build versions differ')
+          print('Verified signed app, production push entitlement and embedded alarm widget')
+          PY
+      - name: Upload to App Store Connect for TestFlight processing
+        run: xcrun altool --upload-app --type ios -f ios-alarm/build/export/AideAlarms.ipa --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+      - name: Remove signing material from ephemeral runner
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/aide.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/aide-signing.p12" "$RUNNER_TEMP/aide-profile.mobileprovision" "$RUNNER_TEMP/aide-profile.plist" "$RUNNER_TEMP/aide-widget.mobileprovision" "$RUNNER_TEMP/aide-widget.plist" "$RUNNER_TEMP/aide-export.plist" "$RUNNER_TEMP/aide-signed-entitlements.plist"
+          if [ -n "$PROFILE_UUID" ]; then rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$PROFILE_UUID.mobileprovision"; fi
+          if [ -n "$WIDGET_PROFILE_UUID" ]; then rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$WIDGET_PROFILE_UUID.mobileprovision"; fi
+          if [ -n "$ASC_KEY_ID" ]; then rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"; fi

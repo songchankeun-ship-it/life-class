@@ -20,6 +20,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Verify app metadata parser
+        run: |
+          swiftc -parse-as-library ios-alarm/AideAppInfo.swift ios-alarm/tests/AppInfoTests.swift -o /tmp/aide-app-info-tests
+          /tmp/aide-app-info-tests
       - name: Generate project without external packages
         run: node ios-alarm/generate-project.mjs
       - name: Compile with iOS 26 SDK without signing

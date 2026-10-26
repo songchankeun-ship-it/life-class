@@ -10,7 +10,7 @@ if(!/^\d{1,3}\.\d{1,3}(?:\.\d{1,3})?$/.test(marketingVersion))throw Error('Inval
 const put=(p,s)=>writeFileSync(root+p,s),dir=p=>mkdirSync(root+p,{recursive:true});
 dir('AideAlarms.xcodeproj/xcshareddata/xcschemes');dir('Assets.xcassets/AppIcon.appiconset');
 const rows=[],add=(key,body)=>rows.push(id(key)+' = {'+body+'};');
-const appFiles=['AideAlarms.swift','AideWebView.swift','AideAlarmModels.swift'];
+const appFiles=['AideAlarms.swift','AideAppInfo.swift','AideWebView.swift','AideAlarmModels.swift'];
 const widgetFiles=['AideAlarmWidget.swift','AideAlarmModels.swift'];
 const resources={app:['Assets.xcassets','PrivacyInfo.xcprivacy'],widget:['WidgetPrivacy/PrivacyInfo.xcprivacy']};
 const refs=[...new Set([...appFiles,...widgetFiles,...resources.app,...resources.widget,'Info.plist','WidgetInfo.plist','AideAlarms.entitlements'])];

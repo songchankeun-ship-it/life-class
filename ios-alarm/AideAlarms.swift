@@ -27,7 +27,7 @@ enum CredentialStore {
 }
 enum AideError: Error { case server(Int), storage, invalidCommand, mismatchedAlarm }
 struct PairBody: Encodable { let code: String; let label: String }
-struct PollBody: Encodable { let authorization: String; let pushToken: String?; let bundleId: String?; let protocolVersion = 2 }
+struct PollBody: Encodable { let authorization: String; let pushToken: String?; let bundleId: String?; let protocolVersion = 2; let appInfo = AideAppInfo.current() }
 struct NativeSchedule: Codable, Equatable {
     let kind: String; let fireAt: Double?; let weekdays: [Int]?; let time: String?; let timeZone: String; let snoozeSeconds: Int
 }

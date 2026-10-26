@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 30fc3307dcf3150144b4c9bc673cdc63e44ea2a4
+          ref: 81c7db295a1ee468e300797736f98ea71d96bfc8
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -96,6 +96,7 @@ jobs:
       - name: Verify app and embedded widget signatures before upload
         run: |
           APP='ios-alarm/build/AideAlarms.xcarchive/Products/Applications/AideAlarms.app'
+          python3 ios-alarm/verify-release-bundle.py "$APP" --version 0.2.0
           codesign --verify --deep --strict "$APP"
           codesign -d --entitlements :- "$APP" > "$RUNNER_TEMP/aide-signed-entitlements.plist" 2>/dev/null
           python3 - <<'PY'
@@ -110,7 +111,9 @@ jobs:
           widget=plistlib.loads((widgets[0]/'Info.plist').read_bytes())
           if widget['CFBundleIdentifier'] != os.environ['BUNDLE_ID']+'.widgets': raise SystemExit('Signed widget bundle ID mismatch')
           if widget['CFBundleVersion'] != info['CFBundleVersion']: raise SystemExit('App and widget build versions differ')
+          if info['CFBundleVersion'] != os.environ['GITHUB_RUN_NUMBER']: raise SystemExit('Unexpected candidate build number')
           print('Verified signed app, production push entitlement and embedded alarm widget')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as summary: summary.write('Aide '+info['CFBundleShortVersionString']+' build '+info['CFBundleVersion']+'; source ''81c7db295a1ee468e300797736f98ea71d96bfc8'+'; app/widget signatures and privacy resources checked. No App Store upload.\n')
           PY
       - name: Verify exported IPA contains exactly the reviewed profiles
         run: |

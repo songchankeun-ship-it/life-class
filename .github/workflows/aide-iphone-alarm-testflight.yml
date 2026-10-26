@@ -2,6 +2,11 @@ name: Aide iPhone TestFlight (manual approval)
 on:
   workflow_dispatch:
     inputs:
+      marketing_version:
+        description: '게시할 앱 버전. 기존 App Store 1.0 제출 항목에 맞출 경우 1.0'
+        type: string
+        required: true
+        default: '1.0'
       confirm_upload:
         description: '본인 Apple 팀의 서명으로 App Store Connect에 시험 빌드를 올립니다 (공개 App Store 출시는 아님)'
         type: boolean
@@ -16,6 +21,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 20
     env:
+      AIDE_MARKETING_VERSION: ${{ inputs.marketing_version }}
       TEAM_ID: ${{ vars.AIDE_IOS_TEAM_ID }}
       BUNDLE_ID: ${{ vars.AIDE_IOS_BUNDLE_ID }}
       ASC_KEY_ID: ${{ secrets.AIDE_ASC_KEY_ID }}
@@ -90,6 +96,7 @@ jobs:
       - name: Verify app and embedded widget signatures before upload
         run: |
           APP='ios-alarm/build/AideAlarms.xcarchive/Products/Applications/AideAlarms.app'
+          python3 ios-alarm/verify-release-bundle.py "$APP" --bundle "$BUNDLE_ID" --version "$AIDE_MARKETING_VERSION"
           codesign --verify --deep --strict "$APP"
           codesign -d --entitlements :- "$APP" > "$RUNNER_TEMP/aide-signed-entitlements.plist" 2>/dev/null
           python3 - <<'PY'

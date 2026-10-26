@@ -1,7 +1,9 @@
 AideAlarms.xcodeproj/
 Assets.xcassets/
 build/
+device-build/
 *.p12
 *.mobileprovision
 *.p8
 *.ipa
+__pycache__/

@@ -1,4 +1,4 @@
-name: Aide iPhone direct install (manual approval)
+name: Aide replacement iPhone install (manual approval)
 on:
   workflow_dispatch:
     inputs:
@@ -11,6 +11,9 @@ on:
         description: 'PC에 보관한 수신용 RSA 공개키 (개인키 입력 금지)'
         type: string
         required: true
+concurrency:
+  group: aide-replacement-iphone-signing
+  cancel-in-progress: false
 permissions:
   contents: read
 jobs:
@@ -34,8 +37,8 @@ jobs:
       - name: Prepare signing material without logging credentials
         env:
           CERTIFICATE_BASE64: ${{ secrets.AIDE_IOS_CERTIFICATE_BASE64 }}
-          PROFILE_BASE64: ${{ secrets.AIDE_IOS_ADHOC_PROFILE_BASE64 }}
-          WIDGET_PROFILE_BASE64: ${{ secrets.AIDE_IOS_ADHOC_WIDGET_PROFILE_BASE64 }}
+          PROFILE_BASE64: ${{ secrets.AIDE_IOS_REPLACEMENT_PROFILE_BASE64 }}
+          WIDGET_PROFILE_BASE64: ${{ secrets.AIDE_IOS_REPLACEMENT_WIDGET_PROFILE_BASE64 }}
         run: |
           python3 - <<'PY'
           import os, re, base64, pathlib, secrets
@@ -59,6 +62,12 @@ jobs:
           security import "$RUNNER_TEMP/aide-signing.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$RUNNER_TEMP/aide.keychain-db"
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/aide.keychain-db"
           security list-keychains -d user -s "$RUNNER_TEMP/aide.keychain-db"
+          python3 - <<'PY'
+          import hashlib,os,pathlib
+          folder=pathlib.Path(os.environ['RUNNER_TEMP'])
+          for name,expected in [('aide-profile.mobileprovision','92233223e2a1947f62e406d934e5a25f20a9ff2caa8176c8238b636e58d4071e'),('aide-widget.mobileprovision','97c7ab7149ca2de630562aadad7b0a9d54f13db94d1fee0e6e9ddb4d318c32f3')]:
+              if hashlib.sha256((folder/name).read_bytes()).hexdigest()!=expected: raise SystemExit('Profile differs from specifically reviewed replacement-only profile')
+          PY
           security cms -D -i "$RUNNER_TEMP/aide-profile.mobileprovision" > "$RUNNER_TEMP/aide-profile.plist"
           security cms -D -i "$RUNNER_TEMP/aide-widget.mobileprovision" > "$RUNNER_TEMP/aide-widget.plist"
           python3 - <<'PY'
@@ -69,7 +78,7 @@ jobs:
           devices=p.get('ProvisionedDevices',[])
           for device in devices: print('::add-mask::'+device)
           if len(devices)!=1 or p.get('ProvisionsAllDevices'): raise SystemExit('Exactly the approved own iPhone is required')
-          if p.get('UUID')!='09173e10-1e86-4298-9b67-07bb439ef1a5': raise SystemExit('Use the specifically reviewed own-iPhone app profile')
+          if p.get('UUID')!='4d511b1e-557b-40b8-ba52-388a4980184f': raise SystemExit('Use the specifically reviewed own-iPhone app profile')
           uuid=p['UUID']
           if not re.fullmatch(r'[A-Fa-f0-9-]{36}',uuid): raise SystemExit('Invalid profile UUID')
           folder=pathlib.Path.home()/'Library/MobileDevice/Provisioning Profiles';folder.mkdir(parents=True,exist_ok=True)
@@ -77,7 +86,7 @@ jobs:
           with open(os.environ['GITHUB_ENV'],'a') as out: out.write('PROFILE_UUID='+uuid+'\n')
           w=plistlib.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'aide-widget.plist').read_bytes());we=w['Entitlements'];wid=w['UUID']
           if we.get('application-identifier') != os.environ['TEAM_ID']+'.'+os.environ['BUNDLE_ID']+'.widgets' or we.get('get-task-allow') or w.get('ProvisionedDevices')!=devices or w.get('ProvisionsAllDevices'): raise SystemExit('Widget must target the same one own iPhone')
-          if w.get('UUID')!='e93a9a84-7b36-4dc5-8d06-4cd78fb16e69': raise SystemExit('Use the specifically reviewed own-iPhone widget profile')
+          if w.get('UUID')!='fc2a8813-9ce5-4d00-950e-83fcfbd6f945': raise SystemExit('Use the specifically reviewed own-iPhone widget profile')
           if not re.fullmatch(r'[A-Fa-f0-9-]{36}',wid): raise SystemExit('Invalid widget profile UUID')
           for profile in [p,w]:
               if profile['ExpirationDate'] <= datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None): raise SystemExit('Distribution profile has expired')
@@ -123,7 +132,7 @@ jobs:
           with zipfile.ZipFile('ios-alarm/build/export/AideAlarms.ipa') as z:
               names=[name for name in z.namelist() if name.endswith('/embedded.mobileprovision')]
               if len(names)!=2: raise SystemExit('Expected app and widget profiles only')
-              expected={'09173e10-1e86-4298-9b67-07bb439ef1a5','e93a9a84-7b36-4dc5-8d06-4cd78fb16e69'}
+              expected={'4d511b1e-557b-40b8-ba52-388a4980184f','fc2a8813-9ce5-4d00-950e-83fcfbd6f945'}
               actual=set()
               for name in names:
                   decoded=subprocess.run(['security','cms','-D'],input=z.read(name),capture_output=True,check=True).stdout
@@ -206,7 +215,7 @@ jobs:
           NODE
       - uses: actions/upload-artifact@v4
         with:
-          name: aide-own-iphone-encrypted
+          name: aide-replacement-iphone-encrypted
           path: ios-alarm/build/AideAlarms.ipa.aide-encrypted
           if-no-files-found: error
           retention-days: 1

@@ -20,7 +20,7 @@ jobs:
   upload:
     if: inputs.confirm_build && github.ref == 'refs/heads/aide/native-alarm-app'
     environment: aide-testflight
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 20
     env:
       TEAM_ID: ${{ vars.AIDE_IOS_TEAM_ID }}

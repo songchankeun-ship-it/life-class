@@ -226,28 +226,77 @@ final class AideDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
     @Environment(\.scenePhase) private var phase
     @StateObject private var executor = AlarmExecutor.shared
     @StateObject private var web = AideWebSession()
-    @State private var selectedTab = CredentialStore.load() == nil ? 1 : 0
+    @AppStorage("AideConnectionGuideIntroduced") private var guideIntroduced = false
+    @State private var consideredInitialGuide = false
+    @State private var guidePresented = false
+    @State private var guideDidDismiss = true
+    @State private var awaitingGuideReturn: AideWebDestination?
+    @State private var awaitingNativeResult = 0
     var body: some Scene { WindowGroup {
-        TabView(selection: $selectedTab) {
-        AideWebView(session: web).overlay { if let error = web.loadError { VStack(spacing: 16) { Image(systemName: "wifi.exclamationmark").font(.largeTitle); Text(error).multilineTextAlignment(.center); Button("다시 연결") { web.open(.reload) } }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(uiColor: .systemBackground)) } else if !web.loaded { ProgressView("Aide를 열고 있어요") } }.tabItem { Label("나의 Aide", systemImage: "sparkles") }.tag(0)
-        NavigationStack { AideConnectionGuide(executor: executor, web: web, selectedTab: $selectedTab) }
-            .tabItem { Label("연결·알람", systemImage: "alarm") }.tag(1)
-        }.onChange(of: phase) { _, value in executor.active(value == .active) }.task { executor.active(true) }
+        // The web root stays mounted while native connection details open above it.
+        AideWebView(session: web)
+            .overlay { if let error = web.loadError { VStack(spacing: 16) { Image(systemName: "wifi.exclamationmark").font(.largeTitle); Text(error).multilineTextAlignment(.center); Button("다시 연결") { web.open(.reload) } }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color(uiColor: .systemBackground)) } else if !web.loaded { ProgressView("Aide를 열고 있어요") } }
+            .sheet(isPresented: $guidePresented, onDismiss: {
+                guideDidDismiss = true
+                resumeGuideIfReady()
+            }) {
+                NavigationStack { AideConnectionGuide(executor: executor, web: web, onClose: closeGuide, openDestination: openFromGuide) }
+                    .presentationDragIndicator(.visible)
+            }
+            .onChange(of: web.connectionGuideRequest) { _, _ in presentGuide() }
+            .onChange(of: web.loaded) { _, _ in considerInitialGuide() }
+            .onChange(of: web.configurationKnown) { _, _ in considerInitialGuide(); resumeGuideIfReady() }
+            .onChange(of: web.configured) { _, _ in resumeGuideIfReady() }
+            .onChange(of: web.nativeConnectionResult) { _, _ in resumeGuideIfReady() }
+            .onChange(of: executor.connected) { _, _ in resumeGuideIfReady() }
+            .onChange(of: phase) { _, value in executor.active(value == .active) }
+            .task { executor.active(true); considerInitialGuide() }
     } }
+    private func considerInitialGuide() {
+        guard !consideredInitialGuide, web.loaded, web.configurationKnown else { return }
+        consideredInitialGuide = true
+        guard !guideIntroduced, !web.configured, !executor.connected else { return }
+        presentGuide()
+    }
+    private func presentGuide() {
+        guideIntroduced = true
+        awaitingGuideReturn = nil
+        guideDidDismiss = false
+        guidePresented = true
+    }
+    private func closeGuide() {
+        awaitingGuideReturn = nil
+        guidePresented = false
+    }
+    private func openFromGuide(_ destination: AideWebDestination) {
+        // Only an explicit unfinished setup step may bring this sheet back.
+        awaitingGuideReturn = destination == .connection && !web.configured ? .connection : destination == .alarmConnection && !executor.connected ? .alarmConnection : nil
+        awaitingNativeResult = web.nativeConnectionResult
+        guideDidDismiss = false
+        guidePresented = false
+        web.open(destination)
+    }
+    private func resumeGuideIfReady() {
+        guard guideDidDismiss, !guidePresented, let destination = awaitingGuideReturn else { return }
+        let ready = destination == .connection ? web.configurationKnown && web.configured : executor.connected && web.nativeConnectionResult > awaitingNativeResult
+        guard ready else { return }
+        awaitingGuideReturn = nil
+        guideDidDismiss = false
+        guidePresented = true
+    }
 }
 
 // Present only the next unfinished step. Connection flags do not prove an alarm reservation.
 private struct AideConnectionGuide: View {
     @ObservedObject var executor: AlarmExecutor
     @ObservedObject var web: AideWebSession
-    @Binding var selectedTab: Int
-    @State private var waitingForSchedule = false
-    @State private var waitingForAlarm = false
+    let onClose: () -> Void
+    let openDestination: (AideWebDestination) -> Void
     @State private var requestingPermission = false
     @State private var code = ""
     @State private var helpOpen = false
     private var step: Int { !web.configured ? 0 : !executor.connected ? 1 : !executor.permissionGranted ? 2 : 3 }
-    private var working: Bool { requestingPermission || (step == 2 && executor.busy) }
+    private var working: Bool { !web.configurationKnown || requestingPermission || (step == 2 && executor.busy) }
     private var titles: [String] { ["같은 일정을\n함께 볼게요", "이 아이폰을\n연결할게요", "알람이 울리도록\n허용해 주세요", "이제 알람을\n함께 챙겨요"] }
     private var subtitles: [String] { ["PC에서 쓰던 Aide에 연결해요.\n기존 일정은 그대로예요.", "PC에서 부탁한 알람을\n이 아이폰이 받을 수 있게 연결해요.", "다음 안내에서 ‘허용’을 눌러 주세요.\n단축어는 필요 없어요.", "연결과 권한 설정을 마쳤어요.\n이제 원하는 알람을 확인하고 저장해요."] }
     private var actions: [String] { ["기존 일정 연결하기", "아이폰 연결하기", "알람 허용하기", "알람 설정하기"] }
@@ -296,7 +345,7 @@ private struct AideConnectionGuide: View {
                 DisclosureGroup("도움이 필요해요", isExpanded: $helpOpen) {
                     VStack(alignment: .leading, spacing: 16) {
                         if step == 0 {
-                            Text("Safari의 Aide와 새 앱은 처음 한 번 따로 연결해요. 연결 정보 확인 후, 실제 일정 동기화는 ‘나의 Aide’에서 확인할 수 있어요.")
+                            Text("Safari의 Aide와 새 앱은 처음 한 번 따로 연결해요. 연결 뒤 앱 첫 화면에서 기존 일정과 동기화 상태를 확인할 수 있어요.")
                         } else if step == 1 {
                             Text("열리는 화면에서 ‘이 아이폰 연결’을 누르세요. 직접 코드를 입력해야 할 때만 아래를 사용해 주세요.")
                             Text("알람 전용 코드는 PC의 ‘아이폰 앱 알람 → 앱 연결 코드 만들기’에 있어요. 일정 연결 코드와는 달라요.")
@@ -327,19 +376,14 @@ private struct AideConnectionGuide: View {
         }
         .navigationTitle(step == 3 ? "연결·알람" : "처음 연결")
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: web.configured) { _, configured in
-            if configured && waitingForSchedule { waitingForSchedule = false; selectedTab = 1 }
-        }
-        .onChange(of: executor.connected) { _, connected in
-            if connected && waitingForAlarm { waitingForAlarm = false; selectedTab = 1 }
-        }
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("닫기", action: onClose) } }
         .onChange(of: step) { _, _ in helpOpen = false }
     }
-    private func open(_ destination: AideWebDestination) { web.open(destination); selectedTab = 0 }
+    private func open(_ destination: AideWebDestination) { openDestination(destination) }
     private func advance() {
         switch step {
-        case 0: waitingForSchedule = true; open(.connection)
-        case 1: waitingForAlarm = true; open(.alarmConnection)
+        case 0: open(.connection)
+        case 1: open(.alarmConnection)
         case 2: requestingPermission = true; Task { await executor.authorize(); requestingPermission = false }
         default: open(.alarms)
         }

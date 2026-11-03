@@ -17,7 +17,7 @@ jobs:
   upload:
     if: inputs.confirm_build && github.ref == 'refs/heads/aide/native-alarm-app'
     environment: aide-testflight
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 20
     env:
       TEAM_ID: ${{ vars.AIDE_IOS_TEAM_ID }}
@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 81c7db295a1ee468e300797736f98ea71d96bfc8
+          ref: ca98410153af8f7c4005d7b3ff473ddaa9ab048e
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -59,6 +59,12 @@ jobs:
           security import "$RUNNER_TEMP/aide-signing.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$RUNNER_TEMP/aide.keychain-db"
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$RUNNER_TEMP/aide.keychain-db"
           security list-keychains -d user -s "$RUNNER_TEMP/aide.keychain-db"
+          python3 - <<'PY'
+          import hashlib,os,pathlib
+          folder=pathlib.Path(os.environ['RUNNER_TEMP'])
+          for name,expected in [('aide-profile.mobileprovision','eac6cf394d9428ddb3490c1b133426a62f4380e2396d5c6fd408f5fa04506b50'),('aide-widget.mobileprovision','92ab558c0c2e114b074c15cbaa169d944d041b9e4583122f22fe24b8188e94a5')]:
+              if hashlib.sha256((folder/name).read_bytes()).hexdigest()!=expected: raise SystemExit('Profile differs from reviewed original-phone profile')
+          PY
           security cms -D -i "$RUNNER_TEMP/aide-profile.mobileprovision" > "$RUNNER_TEMP/aide-profile.plist"
           security cms -D -i "$RUNNER_TEMP/aide-widget.mobileprovision" > "$RUNNER_TEMP/aide-widget.plist"
           python3 - <<'PY'
@@ -113,7 +119,7 @@ jobs:
           if widget['CFBundleVersion'] != info['CFBundleVersion']: raise SystemExit('App and widget build versions differ')
           if info['CFBundleVersion'] != os.environ['GITHUB_RUN_NUMBER']: raise SystemExit('Unexpected candidate build number')
           print('Verified signed app, production push entitlement and embedded alarm widget')
-          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as summary: summary.write('Aide '+info['CFBundleShortVersionString']+' build '+info['CFBundleVersion']+'; source ''81c7db295a1ee468e300797736f98ea71d96bfc8'+'; app/widget signatures and privacy resources checked. No App Store upload.\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as summary: summary.write('Aide '+info['CFBundleShortVersionString']+' build '+info['CFBundleVersion']+'; source ''ca98410153af8f7c4005d7b3ff473ddaa9ab048e'+'; app/widget signatures and privacy resources checked. No App Store upload.\n')
           PY
       - name: Verify exported IPA contains exactly the reviewed profiles
         run: |

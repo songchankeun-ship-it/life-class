@@ -22,7 +22,7 @@ enum AideWebDestination: Equatable { case connection, alarmConnection, alarms, r
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.userContentController.add(context.coordinator, name: "aideAlarm")
-        config.userContentController.addUserScript(WKUserScript(source: "window.aideNativeAlarms=true;window.aideNativeConnectionUI=true;", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        config.userContentController.addUserScript(WKUserScript(source: "window.aideNativeAlarms=true;window.aideNativeConnectionUI=true;window.aideNativeCanReplaceLocalAlarms=true;", injectionTime: .atDocumentStart, forMainFrameOnly: true))
         // Only a presence flag crosses the bridge. Account keys stay inside the web app.
         let report = """
         (()=>{const ready=()=>window.webkit.messageHandlers.aideAlarm.postMessage({type:'web-ready'});const report=()=>{let configured=false;try{configured=localStorage.getItem('lifeclass_cloud_url')===location.origin&&(localStorage.getItem('lifeclass_cloud_key')||'').length>=32;}catch{}window.webkit.messageHandlers.aideAlarm.postMessage({type:'web-session',configured:String(configured)});};window.addEventListener('aide-sync-config',report);window.addEventListener('aide-app-ready',ready);report();if(window.aideNativeReady)ready();})();
@@ -57,16 +57,20 @@ enum AideWebDestination: Equatable { case connection, alarmConnection, alarms, r
         func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
             guard message.frameInfo.isMainFrame, message.frameInfo.securityOrigin.protocol == "https", message.frameInfo.securityOrigin.host == "aide-personal-assistant.songchankeun.workers.dev", [0,443].contains(message.frameInfo.securityOrigin.port), let body = message.body as? [String: String], let type = body["type"] else { return }
             Task { @MainActor in
+                var replacementPairSucceeded: Bool?
                 if type == "web-ready" { appReady = true; session.loaded = true; session.loadError = nil; openRequestedPage(); return }
                 if type == "web-session", let configured = body["configured"], ["true", "false"].contains(configured) { session.configured = configured == "true"; session.configurationKnown = true; return }
                 if type == "show-connection" { session.showConnectionGuide(); return }
                 if type == "pair", let code = body["code"], code.filter(\.isNumber).count == 12 {
-                    await AlarmExecutor.shared.pair(code: code)
-                    if AlarmExecutor.shared.connected { await AlarmExecutor.shared.authorize() }
+                    let replaceLocalAlarms = body["replaceLocalAlarms"] == "true"
+                    let paired = await AlarmExecutor.shared.pair(code: code, replaceLocalAlarms: replaceLocalAlarms)
+                    if replaceLocalAlarms { replacementPairSucceeded = paired }
+                    if AlarmExecutor.shared.connected && (!replaceLocalAlarms || paired) { await AlarmExecutor.shared.authorize() }
                     session.nativeConnectionResult += 1
                 } else if type == "sync" { await AlarmExecutor.shared.sync() }
                 else { return }
-                let payload = ["connected":AlarmExecutor.shared.connected]
+                var payload = ["connected":AlarmExecutor.shared.connected]
+                if let paired = replacementPairSucceeded { payload["paired"] = paired; payload["cleanupPending"] = AlarmExecutor.shared.localAlarmCleanupPending }
                 guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data:data,encoding:.utf8) else { return }
                 _ = try? await webView?.evaluateJavaScript("window.dispatchEvent(new CustomEvent('aide-native-alarm-result',{detail:"+json+"}));")
             }

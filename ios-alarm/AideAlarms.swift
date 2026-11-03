@@ -61,6 +61,12 @@ struct AlarmCheck: Identifiable {
         }
     }
 }
+private struct PendingLocalAlarmCleanup: Codable {
+    let ids: [UUID]
+    // Nil means redemption has not been proved. It must never permit cancellation.
+    let targetDeviceId: String?
+}
+private enum LocalAlarmCleanupError: Error { case authorization, activeAlarm, journal, awaitingCredential, verification }
 private func alarmTiming(_ schedule: NativeSchedule?) -> String {
     guard let schedule else { return "설정 확인 필요" }
     if schedule.kind == "weekly", let days = schedule.weekdays, let time = schedule.time {
@@ -89,6 +95,66 @@ private func alarmTiming(_ schedule: NativeSchedule?) -> String {
     // cannot cause a user-deleted alarm to be silently recreated on the next poll.
     private var confirmed: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "confirmedAlarmIDs") ?? [])
     private func remember(_ id: UUID) { confirmed.insert(id.uuidString); UserDefaults.standard.set(Array(confirmed), forKey: "confirmedAlarmIDs") }
+    private let cleanupDefaultsKey = "AidePendingLocalAlarmCleanup.v1"
+    private var hasPendingLocalCleanup: Bool { UserDefaults.standard.object(forKey: cleanupDefaultsKey) != nil }
+    var localAlarmCleanupPending: Bool { hasPendingLocalCleanup }
+    private func readLocalCleanup() throws -> PendingLocalAlarmCleanup? {
+        guard let stored = UserDefaults.standard.object(forKey: cleanupDefaultsKey) else { return nil }
+        guard let data = stored as? Data, data.count <= 65536,
+              let value = try? JSONDecoder().decode(PendingLocalAlarmCleanup.self, from: data),
+              value.ids.count <= 512, Set(value.ids).count == value.ids.count,
+              value.targetDeviceId == nil || UUID(uuidString: value.targetDeviceId!) != nil
+        else { throw LocalAlarmCleanupError.journal }
+        return value
+    }
+    private func storeLocalCleanup(_ value: PendingLocalAlarmCleanup) throws {
+        let data = try JSONEncoder().encode(value)
+        guard data.count <= 65536 else { throw LocalAlarmCleanupError.journal }
+        UserDefaults.standard.set(data, forKey: cleanupDefaultsKey)
+        // A prepared journal is flushed before network redemption, and the target
+        // is flushed before Keychain save. A lost reply cannot authorize cleanup.
+        guard UserDefaults.standard.synchronize(), UserDefaults.standard.data(forKey: cleanupDefaultsKey) == data else { throw LocalAlarmCleanupError.journal }
+    }
+    private func captureLocalAlarmsForReplacement() throws -> [UUID] {
+        guard authorization == "authorized" else { throw LocalAlarmCleanupError.authorization }
+        let alarms = try AlarmManager.shared.alarms
+        guard alarms.count <= 512, alarms.allSatisfy({ $0.state == .scheduled }) else { throw LocalAlarmCleanupError.activeAlarm }
+        return alarms.map(\.id).sorted { $0.uuidString < $1.uuidString }
+    }
+    private func finishLocalCleanupIfNeeded() throws {
+        guard let cleanup = try readLocalCleanup() else { return }
+        guard authorization == "authorized" else { throw LocalAlarmCleanupError.authorization }
+        guard let target = cleanup.targetDeviceId, CredentialStore.load()?.deviceId == target else { throw LocalAlarmCleanupError.awaitingCredential }
+        let captured = Set(cleanup.ids)
+        for id in cleanup.ids {
+            // State can change during redemption or after a crash. Never stop a
+            // ringing/snoozed/paused alarm on a delayed cleanup attempt.
+            guard let alarm = try AlarmManager.shared.alarms.first(where: { $0.id == id }) else { continue }
+            guard alarm.state == .scheduled else { throw LocalAlarmCleanupError.activeAlarm }
+            try AlarmManager.shared.cancel(id: id)
+        }
+        guard try !AlarmManager.shared.alarms.contains(where: { captured.contains($0.id) }) else { throw LocalAlarmCleanupError.verification }
+        let removed = Set(cleanup.ids.map { $0.uuidString.lowercased() })
+        let nextConfirmed = Set(confirmed.filter { !removed.contains($0.lowercased()) })
+        UserDefaults.standard.set(Array(nextConfirmed), forKey: "confirmedAlarmIDs")
+        guard UserDefaults.standard.synchronize(), Set(UserDefaults.standard.stringArray(forKey: "confirmedAlarmIDs") ?? []) == nextConfirmed else { throw LocalAlarmCleanupError.journal }
+        confirmed = nextConfirmed
+        UserDefaults.standard.removeObject(forKey: cleanupDefaultsKey)
+        guard UserDefaults.standard.synchronize(), !hasPendingLocalCleanup else {
+            // Keep the gate closed if journal deletion could not be confirmed.
+            try storeLocalCleanup(cleanup)
+            throw LocalAlarmCleanupError.journal
+        }
+    }
+    private func localCleanupMessage(_ error: Error) -> String {
+        guard let cleanup = error as? LocalAlarmCleanupError else { return "이전 Aide 알람 정리 결과를 확인하지 못했어요. 정리가 확인될 때까지 새 예약을 보류하며 기존 일정을 바꾸지 않아요." }
+        switch cleanup {
+        case .authorization: return "아이폰 설정에서 Aide 알람 권한을 먼저 허용해 주세요. 정리가 끝날 때까지 새 예약은 보류해요."
+        case .activeAlarm: return "울리거나 다시 알림·일시 정지 중인 Aide 알람을 먼저 확인해 주세요. 해당 알람을 중지하지 않고 새 예약을 보류했어요."
+        case .awaitingCredential: return "연결 응답이 확인되지 않아 이전 알람 정리와 새 예약을 보류했어요. PC에서 연결 상태를 확인하고 새 교체 코드로 다시 승인해 주세요."
+        case .journal, .verification: return "이전 Aide 알람 정리 결과를 확인하지 못했어요. 정리가 확인될 때까지 새 예약은 보류해요."
+        }
+    }
 
     private func api<B: Encodable, R: Decodable>(_ path: String, body: B, auth: Bool = true) async throws -> R {
         var request = URLRequest(url: aideServer.appendingPathComponent(path))
@@ -100,12 +166,25 @@ private func alarmTiming(_ schedule: NativeSchedule?) -> String {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw AideError.server((response as? HTTPURLResponse)?.statusCode ?? 0) }
         return try JSONDecoder().decode(R.self, from: data)
     }
-    func pair(code: String) async {
-        guard !busy else { return }; busy = true; defer { busy = false }
+    @discardableResult func pair(code: String, replaceLocalAlarms: Bool = false) async -> Bool {
+        guard !busy else { return false }; busy = true; defer { busy = false }
+        if !replaceLocalAlarms && hasPendingLocalCleanup { message = "승인한 이전 알람 정리가 남아 있어요. 정리를 마치거나 새 교체 코드로 다시 승인한 뒤 연결해 주세요."; return false }
         do {
+            var captured: [UUID] = []
+            if replaceLocalAlarms { captured = try captureLocalAlarmsForReplacement() }
+            if replaceLocalAlarms { try storeLocalCleanup(PendingLocalAlarmCleanup(ids: captured, targetDeviceId: nil)) }
             let credential: Credentials = try await api("alarms/device/redeem", body: PairBody(code: code.replacingOccurrences(of: "-", with: ""), label: "내 아이폰 알람"), auth: false)
-            try CredentialStore.save(credential); connected = true; message = "연결했어요. 알람 권한을 허용해 주세요."
-        } catch { message = "연결하지 못했어요. 코드 만료·인터넷·PC의 기존 기기 연결을 확인해 주세요." }
+            if replaceLocalAlarms { try storeLocalCleanup(PendingLocalAlarmCleanup(ids: captured, targetDeviceId: credential.deviceId)) }
+            try CredentialStore.save(credential)
+            if replaceLocalAlarms { checks = []; lastSync = nil; reservationCount = 0 }
+            connected = true
+            if replaceLocalAlarms { try finishLocalCleanupIfNeeded() }
+            message = replaceLocalAlarms ? "이전 Aide 알람 정리를 확인했어요. 승인한 알람의 실제 예약을 확인할게요." : "연결했어요. 알람 권한을 허용해 주세요."
+            return true
+        } catch {
+            message = replaceLocalAlarms || hasPendingLocalCleanup ? localCleanupMessage(error) : "연결하지 못했어요. 코드 만료·인터넷·PC의 기존 기기 연결을 확인해 주세요."
+            return false
+        }
     }
     func authorize() async {
         do {
@@ -131,6 +210,8 @@ private func alarmTiming(_ schedule: NativeSchedule?) -> String {
     func sync() async {
         guard connected, !busy else { return }; busy = true; defer { busy = false }
         do {
+            // This gate runs before polling or executing any newer command.
+            try finishLocalCleanupIfNeeded()
             let poll: Poll = try await api("alarms/device/poll", body: PollBody(authorization: authorization, pushToken: pushToken, bundleId: pushToken == nil ? nil : Bundle.main.bundleIdentifier))
             var failures = 0
             for command in poll.commands {
@@ -146,7 +227,7 @@ private func alarmTiming(_ schedule: NativeSchedule?) -> String {
             reservationCount = (try? AlarmManager.shared.alarms.filter { $0.state == .scheduled }.count) ?? 0
             lastSync = Date()
             message = poll.commands.isEmpty ? "새 알람 요청이 없어요. 앱 알람 화면에서 내용을 확인하고 승인해 주세요." : failures == 0 ? "기기에서 읽은 확인 결과를 PC로 보냈어요." : "확인 또는 PC 전달이 끝나지 않은 항목이 있어요. 아래 결과를 확인해 주세요."
-        } catch { message = "서버에 연결하지 못했어요. 기존 예약은 유지돼요. 인터넷·기기 연결을 확인해 주세요." }
+        } catch { message = hasPendingLocalCleanup ? localCleanupMessage(error) : "서버에 연결하지 못했어요. 기존 예약은 유지돼요. 인터넷·기기 연결을 확인해 주세요." }
     }
     private func execute(_ cmd: Command) async throws -> Receipt {
         let observedAt = { Int64(Date().timeIntervalSince1970 * 1000) }
